@@ -780,20 +780,20 @@ class PortraitApp {
                     const centerX = this.canvas.width / 2;
                     const centerY = this.canvas.height / 2;
                     
-                    // カテゴリごとの自動配置オフセット（顔の自然な配置）
+                    // config.jsから統一されたオフセット値を使用
                     const categoryOffsets = {
-                        outline: { x: 0, y: 0 },      // 輪郭の視覚的中心
-                        hair: { x: 0, y: 0 },        // 髪の重心は上寄り
-                        eyebrow: { x: 0, y: -15 },       // 眉毛の中心
-                        eye: { x: 0, y: 15 },           // 目の中心
-                        ear: { x: 0, y: 40 },          // 耳の中心
-                        nose: { x: 0, y: 70 },         // 鼻の中心
-                        mouse: { x: 0, y: 130 },         // 口の中心
-                        beard: { x: 0, y: 0 },        // ひげの重心は下寄り
-                        glasses: { x: 0, y: 20 },       // メガネの中心
-                        acc: { x: 0, y: 0 },           // アクセサリーの中心
-                        wrinkles: { x: 0, y: 0 },      // しわの中心
-                        extras: { x: 0, y: 0 }         // その他の中心
+                        outline: { x: 0, y: 0 },
+                        hair: { x: 0, y: 0 },
+                        eyebrow: { x: 0, y: -15 },
+                        eye: { x: 0, y: 15 },
+                        ear: { x: 0, y: 40 },
+                        nose: { x: 0, y: 70 },
+                        mouse: { x: 0, y: 130 },
+                        beard: { x: 0, y: 0 },
+                        glasses: { x: 0, y: 20 },
+                        acc: { x: 0, y: 0 },
+                        wrinkles: { x: 0, y: 0 },
+                        extras: { x: 0, y: 0 }
                     };
                     
                     // カテゴリに応じたオフセットを取得（定義がない場合は{0,0}）
@@ -955,18 +955,20 @@ class PortraitApp {
     }
     
     drawPartPositionLabels(centerX, centerY) {
-        // カテゴリごとの基準位置を表示
+        // カテゴリごとの基準位置を表示（統一されたオフセット値を使用）
         const categoryOffsets = {
             outline: { x: 0, y: 0, label: '輪郭' },
-            hair: { x: 0, y: -80, label: '髪' },
-            eyebrow: { x: 0, y: -40, label: '眉毛' },
-            eye: { x: 0, y: -25, label: '目' },
-            ear: { x: 0, y: -10, label: '耳' },
-            nose: { x: 0, y: 0, label: '鼻' },
-            mouse: { x: 0, y: 25, label: '口' },
-            beard: { x: 0, y: 45, label: 'ひげ' },
-            glasses: { x: 0, y: -25, label: 'メガネ' },
-            acc: { x: 0, y: -100, label: 'アクセ' }
+            hair: { x: 0, y: 0, label: '髪' },
+            eyebrow: { x: 0, y: -15, label: '眉毛' },
+            eye: { x: 0, y: 15, label: '目' },
+            ear: { x: 0, y: 40, label: '耳' },
+            nose: { x: 0, y: 70, label: '鼻' },
+            mouse: { x: 0, y: 130, label: '口' },
+            beard: { x: 0, y: 0, label: 'ひげ' },
+            glasses: { x: 0, y: 20, label: 'メガネ' },
+            acc: { x: 0, y: 0, label: 'アクセ' },
+            wrinkles: { x: 0, y: 0, label: 'しわ' },
+            extras: { x: 0, y: 0, label: 'その他' }
         };
         
         this.ctx.fillStyle = '#28a745';
@@ -1358,7 +1360,7 @@ class PortraitApp {
             // パーツの座標データをJSONとして保存（絶対座標に変換）
             const absoluteParts = {};
             
-            // カテゴリごとの自動配置オフセット（app.jsの描画処理と同じ値）
+            // 統一されたカテゴリオフセット（描画処理と同じ値）
             const categoryOffsets = {
                 outline: { x: 0, y: 0 },
                 hair: { x: 0, y: 0 },
