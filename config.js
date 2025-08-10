@@ -69,6 +69,12 @@ const APP_CONFIG = {
             max: 180,
             step: 1,
             default: 0
+        },
+        SPACING: {     
+        min: -100, 
+        max: 100,  
+        step: 1,   
+        default: 0 
         }
     },
     
