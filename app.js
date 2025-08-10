@@ -14,6 +14,11 @@ class PortraitApp {
         // 座標軸の表示フラグ
         this.showCoordinates = true;
         
+        // キャッシュの追加
+        this.svgCache = new Map();
+        this.imageCache = new Map();
+        this.thumbnailCache = new Map();
+        
         this.init();
     }
 
@@ -24,6 +29,8 @@ class PortraitApp {
         this.setupImageUpload();
         this.setupPartsGrid();
         this.render();
+        // バックグラウンドで事前読み込み
+        this.preloadAllResources();
     }
 
     async loadManifest() {
@@ -178,6 +185,80 @@ class PortraitApp {
                 });
             }
         }
+    }
+
+    // キャッシュ付きSVG読み込み
+    async getCachedSVG(svgPath) {
+        if (this.svgCache.has(svgPath)) {
+            return this.svgCache.get(svgPath);
+        }
+        
+        try {
+            const response = await fetch(svgPath);
+            if (response.ok) {
+                const svgText = await response.text();
+                this.svgCache.set(svgPath, svgText);
+                return svgText;
+            }
+        } catch (error) {
+            console.error(`SVG読み込みエラー: ${svgPath}`, error);
+        }
+        return null;
+    }
+
+    // キャッシュ付き画像オブジェクト取得
+    async getCachedImage(svgPath, svgText) {
+        const cacheKey = `${svgPath}_${svgText.length}`;
+        
+        if (this.imageCache.has(cacheKey)) {
+            return this.imageCache.get(cacheKey);
+        }
+        
+        const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
+        const url = URL.createObjectURL(svgBlob);
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                this.imageCache.set(cacheKey, img);
+                // URLは保持する（resolve時にURLを含む）
+                resolve(img);
+            };
+            img.onerror = (error) => {
+                URL.revokeObjectURL(url);
+                reject(error);
+            };
+            img.src = url;
+        });
+    }
+
+    // 事前読み込み（バックグラウンド）
+    async preloadAllResources() {
+        if (!this.manifest) return;
+        
+        console.log('バックグラウンドでリソースを事前読み込み中...');
+        const startTime = performance.now();
+        
+        const allPaths = [];
+        Object.entries(this.manifest.categories).forEach(([category, data]) => {
+            data.parts.forEach(partNum => {
+                if (partNum !== 0) {
+                    const folderName = category === 'mouth' ? 'mouse' : category;
+                    const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+                    allPaths.push(svgPath);
+                }
+            });
+        });
+        
+        // 並列で事前読み込み（最大10個ずつ）
+        const batchSize = 10;
+        for (let i = 0; i < allPaths.length; i += batchSize) {
+            const batch = allPaths.slice(i, i + batchSize);
+            await Promise.all(batch.map(path => this.getCachedSVG(path)));
+        }
+        
+        const endTime = performance.now();
+        console.log(`事前読み込み完了: ${allPaths.length}個のファイル (${Math.round(endTime - startTime)}ms)`);
     }
 
     onPartSelect(selectId, value) {
@@ -652,41 +733,17 @@ class PortraitApp {
             // mouth/mouseの名前不一致を修正
             const folderName = originalCategory === 'mouth' ? 'mouse' : originalCategory;
             const svgPath = `assets/assets/${folderName}/${folderName}_${part.id.toString().padStart(3, '0')}.svg`;
-            console.log(`SVGファイルを読み込み中: ${svgPath}`);
-            console.log(`現在のURL: ${window.location.href}`);
-            console.log(`完全なパス: ${window.location.origin}/${svgPath}`);
             
-            const response = await fetch(svgPath);
-            
-            if (!response.ok) {
+            // キャッシュから読み込み
+            const svgText = await this.getCachedSVG(svgPath);
+            if (!svgText) {
                 console.error(`SVGファイルが見つかりません: ${svgPath}`);
-                console.error(`HTTP Status: ${response.status} ${response.statusText}`);
-                console.error(`レスポンスURL: ${response.url}`);
-                
-                // ファイルの存在確認を試行
-                const testResponse = await fetch('assets/assets/manifest.json');
-                if (testResponse.ok) {
-                    console.log('マニフェストファイルは正常に読み込めます');
-                } else {
-                    console.error('マニフェストファイルも読み込めません。ローカルサーバーで実行してください。');
-                }
                 return;
             }
             
-            const svgText = await response.text();
-            console.log(`SVGファイル読み込み成功: ${svgPath}`);
-            console.log(`SVG内容の長さ: ${svgText.length}文字`);
-            
-            // SVGをDataURLに変換
-            const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
-            const url = URL.createObjectURL(svgBlob);
-            console.log(`Blob URL作成: ${url}`);
-            
-            // 画像の読み込みを待つためPromiseを使用
-            await new Promise((resolve, reject) => {
-                const img = new Image();
+            // キャッシュから画像オブジェクトを取得
+            const img = await this.getCachedImage(svgPath, svgText);
                 
-                img.onload = () => {
                     console.log(`画像描画中: ${category}_${part.id}`);
                     console.log(`画像サイズ: ${img.width}x${img.height}`);
                     this.ctx.save();
@@ -751,24 +808,6 @@ class PortraitApp {
                     this.ctx.drawImage(img, drawX, drawY);
                     
                     this.ctx.restore();
-                    
-                    URL.revokeObjectURL(url);
-                    resolve();
-                };
-                
-                img.onerror = (error) => {
-                    console.error(`画像読み込みエラー: ${svgPath}`, error);
-                    console.error('エラー詳細:', {
-                        message: error.message,
-                        type: error.type,
-                        target: error.target
-                    });
-                    URL.revokeObjectURL(url);
-                    reject(error);
-                };
-                
-                img.src = url;
-            });
             
         } catch (error) {
             console.error(`${ERROR_MESSAGES.PART_LOAD_FAILED}: ${category}_${part.id}`, error);
@@ -1115,51 +1154,50 @@ class PortraitApp {
         const categoryData = this.manifest.categories[category];
         if (!categoryData || !categoryData.parts) return;
 
-        // パーツのサムネイルを作成
-        for (const partNum of categoryData.parts) {
-            if (partNum === 0) continue; // 0番は「なし」なのでスキップ
+        // 並列でSVGを読み込み
+        const loadPromises = categoryData.parts.map(async (partNum) => {
+            if (partNum === 0) return null; // 0番は「なし」なのでスキップ
+
+                const folderName = category === 'mouth' ? 'mouse' : category;
+                const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+                
+            try {
+                const svgText = await this.getCachedSVG(svgPath);
+                if (svgText) {
+                    // SVGを直接Data URLとして使用
+                    const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
+                    const url = URL.createObjectURL(svgBlob);
+                    return { partNum, imgSrc: url, success: true };
+                }
+            } catch (error) {
+                console.error(`サムネイル読み込みエラー: ${category}_${partNum}`, error);
+            }
+            return { partNum, success: false };
+        });
+
+        // 全て並列で読み込み
+        const results = await Promise.all(loadPromises);
+
+        // サムネイルを作成
+        results.forEach(result => {
+            if (!result) return;
 
             const thumbnail = document.createElement('div');
             thumbnail.className = 'part-thumbnail';
             thumbnail.dataset.category = category;
-            thumbnail.dataset.partId = partNum;
+            thumbnail.dataset.partId = result.partNum;
 
-            // SVGを読み込んでサムネイル表示
-            try {
-                const folderName = category === 'mouth' ? 'mouse' : category;
-                const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
-                
-                const response = await fetch(svgPath);
-                if (response.ok) {
-                    const svgText = await response.text();
-                    const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
-                    const url = URL.createObjectURL(svgBlob);
-
-                    const img = document.createElement('img');
-                    img.src = url;
-                    img.alt = `${category} ${partNum}`;
-                    img.onload = () => URL.revokeObjectURL(url);
-                    
-                    thumbnail.appendChild(img);
-                } else {
-                    thumbnail.textContent = partNum.toString();
-                }
-            } catch (error) {
-                console.error(`サムネイル読み込みエラー: ${category}_${partNum}`, error);
-                thumbnail.textContent = partNum.toString();
+            if (result.success) {
+                const img = document.createElement('img');
+                img.src = result.imgSrc;
+                img.alt = `${category} ${result.partNum}`;
+                thumbnail.appendChild(img);
+            } else {
+                thumbnail.textContent = result.partNum.toString();
             }
 
-            // クリックイベント
-            thumbnail.addEventListener('click', () => {
-                this.selectPartFromGrid(category, partNum);
-                
-                // 選択状態の表示
-                document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
-                thumbnail.classList.add('selected');
-            });
-
             thumbnailsContainer.appendChild(thumbnail);
-        }
+        });
 
         // 「なし」オプションを追加
         const noneOption = document.createElement('div');
@@ -1173,15 +1211,30 @@ class PortraitApp {
         noneOption.style.fontSize = '12px';
         noneOption.style.color = '#666';
 
-        noneOption.addEventListener('click', () => {
+        thumbnailsContainer.insertBefore(noneOption, thumbnailsContainer.firstChild);
+        
+        // イベントリスナーを追加
+        this.attachThumbnailEventListeners(thumbnailsContainer);
+    }
+
+    // サムネイルのイベントリスナーを追加
+    attachThumbnailEventListeners(container) {
+        container.querySelectorAll('.part-thumbnail').forEach(thumbnail => {
+            thumbnail.addEventListener('click', () => {
+                const category = thumbnail.dataset.category;
+                const partId = thumbnail.dataset.partId;
+                
+                if (partId === '0') {
             this.selectPartFromGrid(category, '');
+                } else {
+                    this.selectPartFromGrid(category, partId);
+                }
             
             // 選択状態の表示
             document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
-            noneOption.classList.add('selected');
+                thumbnail.classList.add('selected');
         });
-
-        thumbnailsContainer.insertBefore(noneOption, thumbnailsContainer.firstChild);
+        });
     }
 
     selectPartFromGrid(category, partId) {
