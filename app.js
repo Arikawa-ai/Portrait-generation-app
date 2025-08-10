@@ -14,6 +14,11 @@ class PortraitApp {
         // 座標軸の表示フラグ
         this.showCoordinates = true;
         
+        // キャッシュの追加
+        this.svgCache = new Map();
+        this.imageCache = new Map();
+        this.thumbnailCache = new Map();
+        
         this.init();
     }
 
@@ -24,6 +29,8 @@ class PortraitApp {
         this.setupImageUpload();
         this.setupPartsGrid();
         this.render();
+        // バックグラウンドで事前読み込み
+        this.preloadAllResources();
     }
 
     async loadManifest() {
@@ -180,6 +187,80 @@ class PortraitApp {
         }
     }
 
+    // キャッシュ付きSVG読み込み
+    async getCachedSVG(svgPath) {
+        if (this.svgCache.has(svgPath)) {
+            return this.svgCache.get(svgPath);
+        }
+        
+        try {
+            const response = await fetch(svgPath);
+            if (response.ok) {
+                const svgText = await response.text();
+                this.svgCache.set(svgPath, svgText);
+                return svgText;
+            }
+        } catch (error) {
+            console.error(`SVG読み込みエラー: ${svgPath}`, error);
+        }
+        return null;
+    }
+
+    // キャッシュ付き画像オブジェクト取得
+    async getCachedImage(svgPath, svgText) {
+        const cacheKey = `${svgPath}_${svgText.length}`;
+        
+        if (this.imageCache.has(cacheKey)) {
+            return this.imageCache.get(cacheKey);
+        }
+        
+        const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
+        const url = URL.createObjectURL(svgBlob);
+        
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                this.imageCache.set(cacheKey, img);
+                // URLは保持する（resolve時にURLを含む）
+                resolve(img);
+            };
+            img.onerror = (error) => {
+                URL.revokeObjectURL(url);
+                reject(error);
+            };
+            img.src = url;
+        });
+    }
+
+    // 事前読み込み（バックグラウンド）
+    async preloadAllResources() {
+        if (!this.manifest) return;
+        
+        console.log('バックグラウンドでリソースを事前読み込み中...');
+        const startTime = performance.now();
+        
+        const allPaths = [];
+        Object.entries(this.manifest.categories).forEach(([category, data]) => {
+            data.parts.forEach(partNum => {
+                if (partNum !== 0) {
+                    const folderName = category === 'mouth' ? 'mouse' : category;
+                    const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+                    allPaths.push(svgPath);
+                }
+            });
+        });
+        
+        // 並列で事前読み込み（最大10個ずつ）
+        const batchSize = 10;
+        for (let i = 0; i < allPaths.length; i += batchSize) {
+            const batch = allPaths.slice(i, i + batchSize);
+            await Promise.all(batch.map(path => this.getCachedSVG(path)));
+        }
+        
+        const endTime = performance.now();
+        console.log(`事前読み込み完了: ${allPaths.length}個のファイル (${Math.round(endTime - startTime)}ms)`);
+    }
+
     onPartSelect(selectId, value) {
         const category = selectId.replace('Select', '');
         console.log(`onPartSelect呼び出し: selectId=${selectId}, value=${value}, category=${category}`);
@@ -309,12 +390,15 @@ class PortraitApp {
     }
 
     selectPart(category) {
+        // カテゴリ名から基本カテゴリを取得（_left, _rightを除去）
+        const baseCategory = category.replace(/_(left|right)$/, '');
+        
         // 左右対称パーツかどうかチェック
-        const isSymmetrical = this.symmetricalParts.includes(category);
+        const isSymmetrical = this.symmetricalParts.includes(baseCategory);
         
         if (isSymmetrical) {
             // 左右対称パーツの場合は左側を選択
-            const leftPartKey = category + '_left';
+            const leftPartKey = baseCategory + '_left';
             if (this.parts[leftPartKey]) {
                 this.selectedPart = leftPartKey;
                 const part = this.parts[leftPartKey];
@@ -327,17 +411,23 @@ class PortraitApp {
                         eyebrow: '眉毛', 
                         ear: '耳'
                     };
-                    const displayName = categoryNames[category] || category;
+                    const displayName = categoryNames[baseCategory] || baseCategory;
                     selectedPartElement.textContent = `${displayName}: ${part.id}`;
                 }
                 
-                // スライダーの値を更新
+                // スライダーの値を更新（基準値からの相対値で表示）
+                const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
                 const scaleX = part.scaleX || part.scale || 1;
                 const scaleY = part.scaleY || part.scale || 1;
-                document.getElementById('sizeSlider').value = scaleX;
-                document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-                document.getElementById('sizeYSlider').value = scaleY;
-                document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+                
+                // デフォルトスケールを基準とした相対値を計算
+                const relativeScaleX = scaleX / defaultScale;
+                const relativeScaleY = scaleY / defaultScale;
+                
+                document.getElementById('sizeSlider').value = relativeScaleX;
+                document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+                document.getElementById('sizeYSlider').value = relativeScaleY;
+                document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
                 document.getElementById('xSlider').value = part.x;
                 document.getElementById('xValue').textContent = part.x;
                 document.getElementById('ySlider').value = part.y;
@@ -345,34 +435,32 @@ class PortraitApp {
                 document.getElementById('rotationSlider').value = part.rotation;
                 document.getElementById('rotationValue').textContent = part.rotation + '°';
                 
-                // 間隔スライダーの値を設定
+                // 間隔スライダーの値を設定（調整値のみ表示）
                 const spacingSlider = document.getElementById('spacingSlider');
                 const spacingValue = document.getElementById('spacingValue');
                 if (spacingSlider && spacingValue) {
-                    const spacing = part.spacing || APP_CONFIG.SYMMETRICAL_SPACING?.[category] || 0;
-                    spacingSlider.value = spacing;
-                    spacingValue.textContent = spacing;
+                    const spacingAdjustment = part.spacing || 0;  // デフォルト間隔への調整値のみ
+                    spacingSlider.value = spacingAdjustment;
+                    spacingValue.textContent = spacingAdjustment;
                 }
                 
                 // 回転スライダーの有効/無効制御
                 const rotationSlider = document.getElementById('rotationSlider');
-                const canRotate = ['eye', 'eyebrow', 'ear'].includes(category);
-                console.log(`回転判定: category=${category}, canRotate=${canRotate}`);
+                const canRotate = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+                console.log(`回転判定: baseCategory=${baseCategory}, canRotate=${canRotate}`);
                 if (rotationSlider) {
                     rotationSlider.disabled = !canRotate;
                     rotationSlider.parentElement.style.opacity = canRotate ? '1' : '0.5';
                     console.log(`回転スライダー設定: disabled=${!canRotate}`);
                 }
                 
-                // 間隔スライダーの表示/非表示
-                const allowSpacing = ['eye', 'eyebrow', 'ear'].includes(category);
-                console.log(`間隔判定: category=${category}, allowSpacing=${allowSpacing}`);
+                // 間隔スライダーの有効/無効制御
+                const allowSpacing = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+                console.log(`間隔判定: baseCategory=${baseCategory}, allowSpacing=${allowSpacing}`);
                 if (spacingSlider) {
-                    const spacingControl = spacingSlider.closest('.control-group');
-                    if (spacingControl) {
-                        spacingControl.style.display = allowSpacing ? 'block' : 'none';
-                        console.log(`間隔スライダー設定: display=${allowSpacing ? 'block' : 'none'}`);
-                    }
+                    spacingSlider.disabled = !allowSpacing;
+                    spacingSlider.parentElement.style.opacity = allowSpacing ? '1' : '0.5';
+                    console.log(`間隔スライダー設定: disabled=${!allowSpacing}`);
                 }
             }
         } else {
@@ -391,13 +479,19 @@ class PortraitApp {
                 selectedPartElement.textContent = `${category}: ${part.id}`;
             }
             
-            // スライダーの値を更新
+            // スライダーの値を更新（基準値からの相対値で表示）
+            const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
             const scaleX = part.scaleX || part.scale || 1;
             const scaleY = part.scaleY || part.scale || 1;
-            document.getElementById('sizeSlider').value = scaleX;
-            document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-            document.getElementById('sizeYSlider').value = scaleY;
-            document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+            
+            // デフォルトスケールを基準とした相対値を計算
+            const relativeScaleX = scaleX / defaultScale;
+            const relativeScaleY = scaleY / defaultScale;
+            
+            document.getElementById('sizeSlider').value = relativeScaleX;
+            document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+            document.getElementById('sizeYSlider').value = relativeScaleY;
+            document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
             document.getElementById('xSlider').value = part.x;
             document.getElementById('xValue').textContent = part.x;
             document.getElementById('ySlider').value = part.y;
@@ -407,21 +501,19 @@ class PortraitApp {
             
             // 回転スライダーの有効/無効制御
             const rotationSlider = document.getElementById('rotationSlider');
-            const canRotate = ['eye', 'eyebrow', 'ear'].includes(category);
-            console.log(`通常パーツ回転判定: category=${category}, canRotate=${canRotate}`);
+            const canRotate = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+            console.log(`通常パーツ回転判定: baseCategory=${baseCategory}, canRotate=${canRotate}`);
             if (rotationSlider) {
                 rotationSlider.disabled = !canRotate;
                 rotationSlider.parentElement.style.opacity = canRotate ? '1' : '0.5';
             }
             
-            // 間隔スライダーを非表示
+            // 間隔スライダーを無効化
             const spacingSlider = document.getElementById('spacingSlider');
             if (spacingSlider) {
-                const spacingControl = spacingSlider.closest('.control-group');
-                if (spacingControl) {
-                    spacingControl.style.display = 'none';
-                    console.log(`通常パーツ間隔スライダー: 非表示`);
-                }
+                spacingSlider.disabled = true;
+                spacingSlider.parentElement.style.opacity = '0.5';
+                console.log(`通常パーツ間隔スライダー: 無効化`);
             }
         }
     }
@@ -433,13 +525,11 @@ class PortraitApp {
             selectedPartElement.textContent = 'なし';
         }
         
-        // 間隔スライダーを非表示
+        // 間隔スライダーを無効化
         const spacingSlider = document.getElementById('spacingSlider');
         if (spacingSlider) {
-            const spacingControl = spacingSlider.closest('.control-group');
-            if (spacingControl) {
-                spacingControl.style.display = 'none';
-            }
+            spacingSlider.disabled = true;
+            spacingSlider.parentElement.style.opacity = '0.5';
         }
     }
 
@@ -504,14 +594,21 @@ class PortraitApp {
         if (!this.selectedPart || !this.parts[this.selectedPart]) return;
 
         const part = this.parts[this.selectedPart];
+        const baseCategory = part.category;
+        const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+        
         const scaleX = part.scaleX || part.scale || 1;
         const scaleY = part.scaleY || part.scale || 1;
+        
+        // デフォルトスケールを基準とした相対値を計算
+        const relativeScaleX = scaleX / defaultScale;
+        const relativeScaleY = scaleY / defaultScale;
 
-        // スライダーの値を更新
-        document.getElementById('sizeSlider').value = scaleX;
-        document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-        document.getElementById('sizeYSlider').value = scaleY;
-        document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+        // スライダーの値を更新（基準値からの相対値で表示）
+        document.getElementById('sizeSlider').value = relativeScaleX;
+        document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+        document.getElementById('sizeYSlider').value = relativeScaleY;
+        document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
         document.getElementById('xSlider').value = part.x;
         document.getElementById('xValue').textContent = part.x;
         document.getElementById('ySlider').value = part.y;
@@ -533,14 +630,21 @@ class PortraitApp {
             const rightPart = this.parts[originalCategory + '_right'];
             
             if (leftPart && rightPart) {
+                // デフォルトスケールを取得
+                const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[originalCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+                
                 switch (sliderId) {
                     case 'sizeSlider':
-                        leftPart.scaleX = parseFloat(value);
-                        rightPart.scaleX = parseFloat(value);
+                        // 相対値を実際の値に変換
+                        const actualScaleX = parseFloat(value) * defaultScale;
+                        leftPart.scaleX = actualScaleX;
+                        rightPart.scaleX = actualScaleX;
                         break;
                     case 'sizeYSlider':
-                        leftPart.scaleY = parseFloat(value);
-                        rightPart.scaleY = parseFloat(value);
+                        // 相対値を実際の値に変換
+                        const actualScaleY = parseFloat(value) * defaultScale;
+                        leftPart.scaleY = actualScaleY;
+                        rightPart.scaleY = actualScaleY;
                         break;
                     case 'xSlider':
                         // X座標は同じ値（間隔調整はspacingで行う）
@@ -571,12 +675,17 @@ class PortraitApp {
             }
         } else {
             // 通常のパーツの場合
+            // デフォルトスケールを取得
+            const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[originalCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+            
             switch (sliderId) {
                 case 'sizeSlider':
-                    part.scaleX = parseFloat(value);
+                    // 相対値を実際の値に変換
+                    part.scaleX = parseFloat(value) * defaultScale;
                     break;
                 case 'sizeYSlider':
-                    part.scaleY = parseFloat(value);
+                    // 相対値を実際の値に変換
+                    part.scaleY = parseFloat(value) * defaultScale;
                     break;
                 case 'xSlider':
                     part.x = parseInt(value);
@@ -652,63 +761,39 @@ class PortraitApp {
             // mouth/mouseの名前不一致を修正
             const folderName = originalCategory === 'mouth' ? 'mouse' : originalCategory;
             const svgPath = `assets/assets/${folderName}/${folderName}_${part.id.toString().padStart(3, '0')}.svg`;
-            console.log(`SVGファイルを読み込み中: ${svgPath}`);
-            console.log(`現在のURL: ${window.location.href}`);
-            console.log(`完全なパス: ${window.location.origin}/${svgPath}`);
             
-            const response = await fetch(svgPath);
-            
-            if (!response.ok) {
+            // キャッシュから読み込み
+            const svgText = await this.getCachedSVG(svgPath);
+            if (!svgText) {
                 console.error(`SVGファイルが見つかりません: ${svgPath}`);
-                console.error(`HTTP Status: ${response.status} ${response.statusText}`);
-                console.error(`レスポンスURL: ${response.url}`);
-                
-                // ファイルの存在確認を試行
-                const testResponse = await fetch('assets/assets/manifest.json');
-                if (testResponse.ok) {
-                    console.log('マニフェストファイルは正常に読み込めます');
-                } else {
-                    console.error('マニフェストファイルも読み込めません。ローカルサーバーで実行してください。');
-                }
                 return;
             }
             
-            const svgText = await response.text();
-            console.log(`SVGファイル読み込み成功: ${svgPath}`);
-            console.log(`SVG内容の長さ: ${svgText.length}文字`);
+            // キャッシュから画像オブジェクトを取得
+            const img = await this.getCachedImage(svgPath, svgText);
             
-            // SVGをDataURLに変換
-            const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
-            const url = URL.createObjectURL(svgBlob);
-            console.log(`Blob URL作成: ${url}`);
-            
-            // 画像の読み込みを待つためPromiseを使用
-            await new Promise((resolve, reject) => {
-                const img = new Image();
-                
-                img.onload = () => {
-                    console.log(`画像描画中: ${category}_${part.id}`);
-                    console.log(`画像サイズ: ${img.width}x${img.height}`);
-                    this.ctx.save();
+            console.log(`画像描画中: ${category}_${part.id}`);
+            console.log(`画像サイズ: ${img.width}x${img.height}`);
+            this.ctx.save();
                     
                     // 常にキャンバスの中央を基準に描画
                     const centerX = this.canvas.width / 2;
                     const centerY = this.canvas.height / 2;
                     
-                    // カテゴリごとの自動配置オフセット（顔の自然な配置）
+                    // config.jsから統一されたオフセット値を使用
                     const categoryOffsets = {
-                        outline: { x: 0, y: 0 },      // 輪郭の視覚的中心
-                        hair: { x: 0, y: 0 },        // 髪の重心は上寄り
-                        eyebrow: { x: 0, y: -15 },       // 眉毛の中心
-                        eye: { x: 0, y: 15 },           // 目の中心
-                        ear: { x: 0, y: 40 },          // 耳の中心
-                        nose: { x: 0, y: 70 },         // 鼻の中心
-                        mouse: { x: 0, y: 130 },         // 口の中心
-                        beard: { x: 0, y: 0 },        // ひげの重心は下寄り
-                        glasses: { x: 0, y: 20 },       // メガネの中心
-                        acc: { x: 0, y: 0 },           // アクセサリーの中心
-                        wrinkles: { x: 0, y: 0 },      // しわの中心
-                        extras: { x: 0, y: 0 }         // その他の中心
+                        outline: { x: 0, y: 0 },
+                        hair: { x: 0, y: 0 },
+                        eyebrow: { x: 0, y: -15 },
+                        eye: { x: 0, y: 15 },
+                        ear: { x: 0, y: 40 },
+                        nose: { x: 0, y: 70 },
+                        mouse: { x: 0, y: 130 },
+                        beard: { x: 0, y: 0 },
+                        glasses: { x: 0, y: 20 },
+                        acc: { x: 0, y: 0 },
+                        wrinkles: { x: 0, y: 0 },
+                        extras: { x: 0, y: 0 }
                     };
                     
                     // カテゴリに応じたオフセットを取得（定義がない場合は{0,0}）
@@ -751,24 +836,6 @@ class PortraitApp {
                     this.ctx.drawImage(img, drawX, drawY);
                     
                     this.ctx.restore();
-                    
-                    URL.revokeObjectURL(url);
-                    resolve();
-                };
-                
-                img.onerror = (error) => {
-                    console.error(`画像読み込みエラー: ${svgPath}`, error);
-                    console.error('エラー詳細:', {
-                        message: error.message,
-                        type: error.type,
-                        target: error.target
-                    });
-                    URL.revokeObjectURL(url);
-                    reject(error);
-                };
-                
-                img.src = url;
-            });
             
         } catch (error) {
             console.error(`${ERROR_MESSAGES.PART_LOAD_FAILED}: ${category}_${part.id}`, error);
@@ -888,18 +955,20 @@ class PortraitApp {
     }
     
     drawPartPositionLabels(centerX, centerY) {
-        // カテゴリごとの基準位置を表示
+        // カテゴリごとの基準位置を表示（統一されたオフセット値を使用）
         const categoryOffsets = {
             outline: { x: 0, y: 0, label: '輪郭' },
-            hair: { x: 0, y: -80, label: '髪' },
-            eyebrow: { x: 0, y: -40, label: '眉毛' },
-            eye: { x: 0, y: -25, label: '目' },
-            ear: { x: 0, y: -10, label: '耳' },
-            nose: { x: 0, y: 0, label: '鼻' },
-            mouse: { x: 0, y: 25, label: '口' },
-            beard: { x: 0, y: 45, label: 'ひげ' },
-            glasses: { x: 0, y: -25, label: 'メガネ' },
-            acc: { x: 0, y: -100, label: 'アクセ' }
+            hair: { x: 0, y: 0, label: '髪' },
+            eyebrow: { x: 0, y: -15, label: '眉毛' },
+            eye: { x: 0, y: 15, label: '目' },
+            ear: { x: 0, y: 40, label: '耳' },
+            nose: { x: 0, y: 70, label: '鼻' },
+            mouse: { x: 0, y: 130, label: '口' },
+            beard: { x: 0, y: 0, label: 'ひげ' },
+            glasses: { x: 0, y: 20, label: 'メガネ' },
+            acc: { x: 0, y: 0, label: 'アクセ' },
+            wrinkles: { x: 0, y: 0, label: 'しわ' },
+            extras: { x: 0, y: 0, label: 'その他' }
         };
         
         this.ctx.fillStyle = '#28a745';
@@ -1115,51 +1184,50 @@ class PortraitApp {
         const categoryData = this.manifest.categories[category];
         if (!categoryData || !categoryData.parts) return;
 
-        // パーツのサムネイルを作成
-        for (const partNum of categoryData.parts) {
-            if (partNum === 0) continue; // 0番は「なし」なのでスキップ
+        // 並列でSVGを読み込み
+        const loadPromises = categoryData.parts.map(async (partNum) => {
+            if (partNum === 0) return null; // 0番は「なし」なのでスキップ
+
+            const folderName = category === 'mouth' ? 'mouse' : category;
+            const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+            
+            try {
+                const svgText = await this.getCachedSVG(svgPath);
+                if (svgText) {
+                    // SVGを直接Data URLとして使用
+                    const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
+                    const url = URL.createObjectURL(svgBlob);
+                    return { partNum, imgSrc: url, success: true };
+                }
+            } catch (error) {
+                console.error(`サムネイル読み込みエラー: ${category}_${partNum}`, error);
+            }
+            return { partNum, success: false };
+        });
+
+        // 全て並列で読み込み
+        const results = await Promise.all(loadPromises);
+
+        // サムネイルを作成
+        results.forEach(result => {
+            if (!result) return;
 
             const thumbnail = document.createElement('div');
             thumbnail.className = 'part-thumbnail';
             thumbnail.dataset.category = category;
-            thumbnail.dataset.partId = partNum;
+            thumbnail.dataset.partId = result.partNum;
 
-            // SVGを読み込んでサムネイル表示
-            try {
-                const folderName = category === 'mouth' ? 'mouse' : category;
-                const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
-                
-                const response = await fetch(svgPath);
-                if (response.ok) {
-                    const svgText = await response.text();
-                    const svgBlob = new Blob([svgText], {type: 'image/svg+xml'});
-                    const url = URL.createObjectURL(svgBlob);
-
-                    const img = document.createElement('img');
-                    img.src = url;
-                    img.alt = `${category} ${partNum}`;
-                    img.onload = () => URL.revokeObjectURL(url);
-                    
-                    thumbnail.appendChild(img);
-                } else {
-                    thumbnail.textContent = partNum.toString();
-                }
-            } catch (error) {
-                console.error(`サムネイル読み込みエラー: ${category}_${partNum}`, error);
-                thumbnail.textContent = partNum.toString();
+            if (result.success) {
+                const img = document.createElement('img');
+                img.src = result.imgSrc;
+                img.alt = `${category} ${result.partNum}`;
+                thumbnail.appendChild(img);
+            } else {
+                thumbnail.textContent = result.partNum.toString();
             }
 
-            // クリックイベント
-            thumbnail.addEventListener('click', () => {
-                this.selectPartFromGrid(category, partNum);
-                
-                // 選択状態の表示
-                document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
-                thumbnail.classList.add('selected');
-            });
-
             thumbnailsContainer.appendChild(thumbnail);
-        }
+        });
 
         // 「なし」オプションを追加
         const noneOption = document.createElement('div');
@@ -1173,15 +1241,30 @@ class PortraitApp {
         noneOption.style.fontSize = '12px';
         noneOption.style.color = '#666';
 
-        noneOption.addEventListener('click', () => {
-            this.selectPartFromGrid(category, '');
-            
-            // 選択状態の表示
-            document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
-            noneOption.classList.add('selected');
-        });
-
         thumbnailsContainer.insertBefore(noneOption, thumbnailsContainer.firstChild);
+        
+        // イベントリスナーを追加
+        this.attachThumbnailEventListeners(thumbnailsContainer);
+    }
+
+    // サムネイルのイベントリスナーを追加
+    attachThumbnailEventListeners(container) {
+        container.querySelectorAll('.part-thumbnail').forEach(thumbnail => {
+            thumbnail.addEventListener('click', () => {
+                const category = thumbnail.dataset.category;
+                const partId = thumbnail.dataset.partId;
+                
+                if (partId === '0') {
+                    this.selectPartFromGrid(category, '');
+                } else {
+                    this.selectPartFromGrid(category, partId);
+                }
+                
+                // 選択状態の表示
+                document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
+                thumbnail.classList.add('selected');
+            });
+        });
     }
 
     selectPartFromGrid(category, partId) {
@@ -1277,7 +1360,7 @@ class PortraitApp {
             // パーツの座標データをJSONとして保存（絶対座標に変換）
             const absoluteParts = {};
             
-            // カテゴリごとの自動配置オフセット（app.jsの描画処理と同じ値）
+            // 統一されたカテゴリオフセット（描画処理と同じ値）
             const categoryOffsets = {
                 outline: { x: 0, y: 0 },
                 hair: { x: 0, y: 0 },
