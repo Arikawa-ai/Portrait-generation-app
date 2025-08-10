@@ -390,12 +390,15 @@ class PortraitApp {
     }
 
     selectPart(category) {
+        // カテゴリ名から基本カテゴリを取得（_left, _rightを除去）
+        const baseCategory = category.replace(/_(left|right)$/, '');
+        
         // 左右対称パーツかどうかチェック
-        const isSymmetrical = this.symmetricalParts.includes(category);
+        const isSymmetrical = this.symmetricalParts.includes(baseCategory);
         
         if (isSymmetrical) {
             // 左右対称パーツの場合は左側を選択
-            const leftPartKey = category + '_left';
+            const leftPartKey = baseCategory + '_left';
             if (this.parts[leftPartKey]) {
                 this.selectedPart = leftPartKey;
                 const part = this.parts[leftPartKey];
@@ -408,17 +411,23 @@ class PortraitApp {
                         eyebrow: '眉毛', 
                         ear: '耳'
                     };
-                    const displayName = categoryNames[category] || category;
+                    const displayName = categoryNames[baseCategory] || baseCategory;
                     selectedPartElement.textContent = `${displayName}: ${part.id}`;
                 }
                 
-                // スライダーの値を更新
+                // スライダーの値を更新（基準値からの相対値で表示）
+                const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
                 const scaleX = part.scaleX || part.scale || 1;
                 const scaleY = part.scaleY || part.scale || 1;
-                document.getElementById('sizeSlider').value = scaleX;
-                document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-                document.getElementById('sizeYSlider').value = scaleY;
-                document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+                
+                // デフォルトスケールを基準とした相対値を計算
+                const relativeScaleX = scaleX / defaultScale;
+                const relativeScaleY = scaleY / defaultScale;
+                
+                document.getElementById('sizeSlider').value = relativeScaleX;
+                document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+                document.getElementById('sizeYSlider').value = relativeScaleY;
+                document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
                 document.getElementById('xSlider').value = part.x;
                 document.getElementById('xValue').textContent = part.x;
                 document.getElementById('ySlider').value = part.y;
@@ -426,34 +435,32 @@ class PortraitApp {
                 document.getElementById('rotationSlider').value = part.rotation;
                 document.getElementById('rotationValue').textContent = part.rotation + '°';
                 
-                // 間隔スライダーの値を設定
+                // 間隔スライダーの値を設定（調整値のみ表示）
                 const spacingSlider = document.getElementById('spacingSlider');
                 const spacingValue = document.getElementById('spacingValue');
                 if (spacingSlider && spacingValue) {
-                    const spacing = part.spacing || APP_CONFIG.SYMMETRICAL_SPACING?.[category] || 0;
-                    spacingSlider.value = spacing;
-                    spacingValue.textContent = spacing;
+                    const spacingAdjustment = part.spacing || 0;  // デフォルト間隔への調整値のみ
+                    spacingSlider.value = spacingAdjustment;
+                    spacingValue.textContent = spacingAdjustment;
                 }
                 
                 // 回転スライダーの有効/無効制御
                 const rotationSlider = document.getElementById('rotationSlider');
-                const canRotate = ['eye', 'eyebrow', 'ear'].includes(category);
-                console.log(`回転判定: category=${category}, canRotate=${canRotate}`);
+                const canRotate = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+                console.log(`回転判定: baseCategory=${baseCategory}, canRotate=${canRotate}`);
                 if (rotationSlider) {
                     rotationSlider.disabled = !canRotate;
                     rotationSlider.parentElement.style.opacity = canRotate ? '1' : '0.5';
                     console.log(`回転スライダー設定: disabled=${!canRotate}`);
                 }
                 
-                // 間隔スライダーの表示/非表示
-                const allowSpacing = ['eye', 'eyebrow', 'ear'].includes(category);
-                console.log(`間隔判定: category=${category}, allowSpacing=${allowSpacing}`);
+                // 間隔スライダーの有効/無効制御
+                const allowSpacing = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+                console.log(`間隔判定: baseCategory=${baseCategory}, allowSpacing=${allowSpacing}`);
                 if (spacingSlider) {
-                    const spacingControl = spacingSlider.closest('.control-group');
-                    if (spacingControl) {
-                        spacingControl.style.display = allowSpacing ? 'block' : 'none';
-                        console.log(`間隔スライダー設定: display=${allowSpacing ? 'block' : 'none'}`);
-                    }
+                    spacingSlider.disabled = !allowSpacing;
+                    spacingSlider.parentElement.style.opacity = allowSpacing ? '1' : '0.5';
+                    console.log(`間隔スライダー設定: disabled=${!allowSpacing}`);
                 }
             }
         } else {
@@ -472,13 +479,19 @@ class PortraitApp {
                 selectedPartElement.textContent = `${category}: ${part.id}`;
             }
             
-            // スライダーの値を更新
+            // スライダーの値を更新（基準値からの相対値で表示）
+            const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
             const scaleX = part.scaleX || part.scale || 1;
             const scaleY = part.scaleY || part.scale || 1;
-            document.getElementById('sizeSlider').value = scaleX;
-            document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-            document.getElementById('sizeYSlider').value = scaleY;
-            document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+            
+            // デフォルトスケールを基準とした相対値を計算
+            const relativeScaleX = scaleX / defaultScale;
+            const relativeScaleY = scaleY / defaultScale;
+            
+            document.getElementById('sizeSlider').value = relativeScaleX;
+            document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+            document.getElementById('sizeYSlider').value = relativeScaleY;
+            document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
             document.getElementById('xSlider').value = part.x;
             document.getElementById('xValue').textContent = part.x;
             document.getElementById('ySlider').value = part.y;
@@ -488,21 +501,19 @@ class PortraitApp {
             
             // 回転スライダーの有効/無効制御
             const rotationSlider = document.getElementById('rotationSlider');
-            const canRotate = ['eye', 'eyebrow', 'ear'].includes(category);
-            console.log(`通常パーツ回転判定: category=${category}, canRotate=${canRotate}`);
+            const canRotate = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
+            console.log(`通常パーツ回転判定: baseCategory=${baseCategory}, canRotate=${canRotate}`);
             if (rotationSlider) {
                 rotationSlider.disabled = !canRotate;
                 rotationSlider.parentElement.style.opacity = canRotate ? '1' : '0.5';
             }
             
-            // 間隔スライダーを非表示
+            // 間隔スライダーを無効化
             const spacingSlider = document.getElementById('spacingSlider');
             if (spacingSlider) {
-                const spacingControl = spacingSlider.closest('.control-group');
-                if (spacingControl) {
-                    spacingControl.style.display = 'none';
-                    console.log(`通常パーツ間隔スライダー: 非表示`);
-                }
+                spacingSlider.disabled = true;
+                spacingSlider.parentElement.style.opacity = '0.5';
+                console.log(`通常パーツ間隔スライダー: 無効化`);
             }
         }
     }
@@ -514,13 +525,11 @@ class PortraitApp {
             selectedPartElement.textContent = 'なし';
         }
         
-        // 間隔スライダーを非表示
+        // 間隔スライダーを無効化
         const spacingSlider = document.getElementById('spacingSlider');
         if (spacingSlider) {
-            const spacingControl = spacingSlider.closest('.control-group');
-            if (spacingControl) {
-                spacingControl.style.display = 'none';
-            }
+            spacingSlider.disabled = true;
+            spacingSlider.parentElement.style.opacity = '0.5';
         }
     }
 
@@ -585,14 +594,21 @@ class PortraitApp {
         if (!this.selectedPart || !this.parts[this.selectedPart]) return;
 
         const part = this.parts[this.selectedPart];
+        const baseCategory = part.category;
+        const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+        
         const scaleX = part.scaleX || part.scale || 1;
         const scaleY = part.scaleY || part.scale || 1;
+        
+        // デフォルトスケールを基準とした相対値を計算
+        const relativeScaleX = scaleX / defaultScale;
+        const relativeScaleY = scaleY / defaultScale;
 
-        // スライダーの値を更新
-        document.getElementById('sizeSlider').value = scaleX;
-        document.getElementById('sizeValue').textContent = scaleX.toFixed(1);
-        document.getElementById('sizeYSlider').value = scaleY;
-        document.getElementById('sizeYValue').textContent = scaleY.toFixed(1);
+        // スライダーの値を更新（基準値からの相対値で表示）
+        document.getElementById('sizeSlider').value = relativeScaleX;
+        document.getElementById('sizeValue').textContent = relativeScaleX.toFixed(1);
+        document.getElementById('sizeYSlider').value = relativeScaleY;
+        document.getElementById('sizeYValue').textContent = relativeScaleY.toFixed(1);
         document.getElementById('xSlider').value = part.x;
         document.getElementById('xValue').textContent = part.x;
         document.getElementById('ySlider').value = part.y;
@@ -614,14 +630,21 @@ class PortraitApp {
             const rightPart = this.parts[originalCategory + '_right'];
             
             if (leftPart && rightPart) {
+                // デフォルトスケールを取得
+                const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[originalCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+                
                 switch (sliderId) {
                     case 'sizeSlider':
-                        leftPart.scaleX = parseFloat(value);
-                        rightPart.scaleX = parseFloat(value);
+                        // 相対値を実際の値に変換
+                        const actualScaleX = parseFloat(value) * defaultScale;
+                        leftPart.scaleX = actualScaleX;
+                        rightPart.scaleX = actualScaleX;
                         break;
                     case 'sizeYSlider':
-                        leftPart.scaleY = parseFloat(value);
-                        rightPart.scaleY = parseFloat(value);
+                        // 相対値を実際の値に変換
+                        const actualScaleY = parseFloat(value) * defaultScale;
+                        leftPart.scaleY = actualScaleY;
+                        rightPart.scaleY = actualScaleY;
                         break;
                     case 'xSlider':
                         // X座標は同じ値（間隔調整はspacingで行う）
@@ -652,12 +675,17 @@ class PortraitApp {
             }
         } else {
             // 通常のパーツの場合
+            // デフォルトスケールを取得
+            const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[originalCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
+            
             switch (sliderId) {
                 case 'sizeSlider':
-                    part.scaleX = parseFloat(value);
+                    // 相対値を実際の値に変換
+                    part.scaleX = parseFloat(value) * defaultScale;
                     break;
                 case 'sizeYSlider':
-                    part.scaleY = parseFloat(value);
+                    // 相対値を実際の値に変換
+                    part.scaleY = parseFloat(value) * defaultScale;
                     break;
                 case 'xSlider':
                     part.x = parseInt(value);
@@ -743,10 +771,10 @@ class PortraitApp {
             
             // キャッシュから画像オブジェクトを取得
             const img = await this.getCachedImage(svgPath, svgText);
-                
-                    console.log(`画像描画中: ${category}_${part.id}`);
-                    console.log(`画像サイズ: ${img.width}x${img.height}`);
-                    this.ctx.save();
+            
+            console.log(`画像描画中: ${category}_${part.id}`);
+            console.log(`画像サイズ: ${img.width}x${img.height}`);
+            this.ctx.save();
                     
                     // 常にキャンバスの中央を基準に描画
                     const centerX = this.canvas.width / 2;
@@ -1158,9 +1186,9 @@ class PortraitApp {
         const loadPromises = categoryData.parts.map(async (partNum) => {
             if (partNum === 0) return null; // 0番は「なし」なのでスキップ
 
-                const folderName = category === 'mouth' ? 'mouse' : category;
-                const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
-                
+            const folderName = category === 'mouth' ? 'mouse' : category;
+            const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+            
             try {
                 const svgText = await this.getCachedSVG(svgPath);
                 if (svgText) {
@@ -1225,15 +1253,15 @@ class PortraitApp {
                 const partId = thumbnail.dataset.partId;
                 
                 if (partId === '0') {
-            this.selectPartFromGrid(category, '');
+                    this.selectPartFromGrid(category, '');
                 } else {
                     this.selectPartFromGrid(category, partId);
                 }
-            
-            // 選択状態の表示
-            document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
+                
+                // 選択状態の表示
+                document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
                 thumbnail.classList.add('selected');
-        });
+            });
         });
     }
 
