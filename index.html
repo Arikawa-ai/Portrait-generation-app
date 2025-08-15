@@ -3,213 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSPを適切に設定 -->
-    <meta http-equiv="Content-Security-Policy" content="
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:;
-        script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' blob: data:;
-        img-src 'self' data: blob:;
-        style-src 'self' 'unsafe-inline';
-        connect-src 'self';
-    ">
     <title>似顔絵作成アプリ</title>
-    <link rel="stylesheet" href="styles.css">
+    <script>
+        // photo-list.htmlにリダイレクト
+        window.location.href = 'photo-list.html';
+    </script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>似顔絵作成アプリ</h1>
-        </header>
-
-        <main>
-            <div class="main-layout">
-                <!-- 左側2列エリア -->
-                <div class="left-area">
-                    <!-- 上段：写真とキャンバス -->
-                    <div class="top-section">
-                        <!-- 写真表示エリア -->
-                        <div class="photo-section">
-                            <h3>写真</h3>
-                            <div id="referenceImage" class="photo-display-large">
-                                <p>写真をアップロード</p>
-                            </div>
-                            <input type="file" id="fileInput" accept="image/*" style="display: none;">
-                            <button id="uploadBtn" class="btn btn-primary" title="参考画像をアップロード">
-                                写真を選択
-                            </button>
-                            <div id="uploadStatus" class="status" role="status" aria-live="polite"></div>
-                        </div>
-
-                        <!-- 似顔絵キャンバス -->
-                        <div class="canvas-section">
-                            <h3>似顔絵プレビュー</h3>
-                            <canvas id="canvas" width="600" height="600" title="似顔絵作成キャンバス"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- 保存ボタンセクション -->
-                    <div class="save-section">
-                        <button id="saveBtn" class="btn btn-success btn-large" title="似顔絵を保存">
-                            保存（JSONと似顔絵画像が保存されます）
-                        </button>
-                        <button id="clearBtn" class="btn btn-secondary" title="キャンバスをクリア">
-                            リセット
-                        </button>
-                        <button id="coordBtn" class="btn btn-primary" title="座標軸の表示を切り替え">
-                            座標軸を非表示
-                        </button>
-                    </div>
-
-                    <!-- 調整パネル -->
-                    <div class="adjustment-panel">
-                        <h3>パーツの編集</h3>
-                        
-                        <div class="control-group">
-                            <label for="partSelector">編集するパーツ:</label>
-                            <select id="partSelector" class="part-select" title="調整するパーツを選択">
-                                <option value="">パーツを選択してください</option>
-                            </select>
-                            <button id="resetPartBtn" class="btn btn-secondary" title="選択中のパーツをデフォルト値にリセット" style="margin-top: 10px; width: 100%;">
-                                パーツをリセット
-                            </button>
-                        </div>
-
-                        <div class="adjustment-grid">
-                            <div class="control-group">
-                                <label>サイズ（横）</label>
-                                <div class="slider-container">
-                                    <span class="min-label">小</span>
-                                    <input type="range" id="sizeSlider" min="0.1" max="3" step="0.1" value="1" 
-                                           title="パーツのサイズを調整">
-                                    <span class="max-label">大</span>
-                                </div>
-                                <div class="value-display"><span id="sizeValue">1.0</span></div>
-                            </div>
-
-                            <div class="control-group">
-                                <label>サイズ（縦）</label>
-                                <div class="slider-container">
-                                    <span class="min-label">小</span>
-                                    <input type="range" id="sizeYSlider" min="0.1" max="3" step="0.1" value="1" 
-                                           title="パーツの縦サイズを調整">
-                                    <span class="max-label">大</span>
-                                </div>
-                                <div class="value-display"><span id="sizeYValue">1.0</span></div>
-                            </div>
-
-                            <div class="control-group">
-                                <label>位置（左右）</label>
-                                <div class="slider-container">
-                                    <span class="min-label">左</span>
-                                    <input type="range" id="xSlider" min="-200" max="200" step="1" value="0" 
-                                           title="パーツの左右位置を調整">
-                                    <span class="max-label">右</span>
-                                </div>
-                                <div class="value-display"><span id="xValue">0</span></div>
-                            </div>
-
-                            <div class="control-group">
-                                <label>位置（上下）</label>
-                                <div class="slider-container">
-                                    <span class="min-label">上</span>
-                                    <input type="range" id="ySlider" min="-200" max="200" step="1" value="0" 
-                                           title="パーツの上下位置を調整">
-                                    <span class="max-label">下</span>
-                                </div>
-                                <div class="value-display"><span id="yValue">0</span></div>
-                            </div>
-
-                            <div class="control-group">
-                                <label>回転</label>
-                                <div class="slider-container">
-                                    <span class="min-label">内側</span>
-                                    <input type="range" id="rotationSlider" min="-180" max="180" step="1" value="0" 
-                                           title="パーツの回転角度を調整（+で外側、-で内側）">
-                                    <span class="max-label">外側</span>
-                                </div>
-                                <div class="value-display"><span id="rotationValue">0°</span></div>
-                            </div>
-
-                            <div class="control-group" id="spacingControl">
-                                <label>左右の間隔</label>
-                                <div class="slider-container">
-                                    <span class="min-label">狭い</span>
-                                    <input type="range" id="spacingSlider" min="-200" max="200" step="1" value="0" 
-                                           title="左右パーツの間隔を調整">
-                                    <span class="max-label">広い</span>
-                                </div>
-                                <div class="value-display"><span id="spacingValue">0</span></div>
-                            </div>
-                        </div>
-
-                        <!-- 透明度コントロール（削除）
-                        <div class="opacity-control" style="display: none;">
-                            <div class="control-group">
-                                <label>参考画像の透明度</label>
-                                <div class="slider-container">
-                                    <input type="range" id="opacitySlider" min="0.1" max="1" step="0.1" value="0.3" 
-                                           title="参考画像の透明度を調整">
-                                </div>
-                                <div class="value-display"><span id="opacityValue">30%</span></div>
-                            </div>
-                        </div>
-                        -->
-                    </div>
-                </div>
-
-                <!-- 右側：パーツ選択パネル -->
-                <div class="parts-selection-panel">
-                    <h3>パーツ選択</h3>
-                    
-                    <!-- カテゴリタブ -->
-                    <div class="category-tabs">
-                        <button class="category-tab active" data-category="hair">髪</button>
-                        <button class="category-tab" data-category="outline">輪郭</button>
-                        <button class="category-tab" data-category="eye">目</button>
-                        <button class="category-tab" data-category="eyebrow">眉毛</button>
-                        <button class="category-tab" data-category="nose">鼻</button>
-                        <button class="category-tab" data-category="mouse">口</button>
-                        <button class="category-tab" data-category="ear">耳</button>
-                        <button class="category-tab" data-category="beard">ひげ</button>
-                        <button class="category-tab" data-category="glasses">メガネ</button>
-                        <button class="category-tab" data-category="acc">アクセサリー</button>
-                        <button class="category-tab" data-category="wrinkles">しわ</button>
-                        <button class="category-tab" data-category="extras">その他</button>
-                    </div>
-
-                    <!-- パーツグリッド -->
-                    <div class="parts-grid" id="partsGrid">
-                        <div class="parts-thumbnails" id="partsThumbnails">
-                            <!-- パーツのサムネイルがここに動的に表示されます -->
-                        </div>
-                        <div class="parts-grid-nav">
-                            <button class="nav-button" id="prevPage">◀ 前へ</button>
-                            <span id="pageInfo">1 / 1</span>
-                            <button class="nav-button" id="nextPage">次へ ▶</button>
-                        </div>
-                    </div>
-
-                    <!-- 従来のセレクトボックス（一時的に非表示） -->
-                    <div style="display: none;">
-                        <select id="hairSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="outlineSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="eyeSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="eyebrowSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="noseSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="mouseSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="earSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="beardSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="glassesSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="accSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="wrinklesSelect" class="part-select"><option value="">なし</option></select>
-                        <select id="extrasSelect" class="part-select"><option value="">なし</option></select>
-                    </div>
-                </div>
-            </div>
-        </main>
+    <div class="loading">
+        <div class="spinner"></div>
+        <p>似顔絵作成アプリを読み込み中...</p>
+        <p><a href="photo-list.html">こちらをクリックしてください</a></p>
     </div>
-
-    <script src="config.js"></script>
-    <script src="app.js"></script>
 </body>
 </html>

@@ -33,11 +33,47 @@ header {
     backdrop-filter: blur(10px);
 }
 
+/* ヘッダーレイアウト */
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 header h1 {
-    text-align: center;
     color: #2c3e50;
     font-size: 1.5em;
     font-weight: 700;
+    margin: 0;
+}
+
+/* ナビゲーション */
+.header-nav {
+    display: flex;
+    gap: 15px;
+}
+
+.nav-link {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.nav-link:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+.nav-link:active {
+    transform: translateY(0);
 }
 
 main {

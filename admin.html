@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>似顔絵アプリ - 管理画面</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .auth-section {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .auth-form input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .auth-form button {
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .auth-form button:hover {
+            background: #45a049;
+        }
+        .admin-panel {
+            display: none;
+        }
+        .admin-panel.active {
+            display: block;
+        }
+        .parts-manager {
+            margin-top: 30px;
+        }
+        .category-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        .parts-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .part-item {
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            text-align: center;
+            position: relative;
+        }
+        .part-item img {
+            width: 100%;
+            height: 100px;
+            object-fit: contain;
+        }
+        .part-item button {
+            margin-top: 5px;
+            padding: 5px 10px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+        }
+        .upload-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h1>似顔絵アプリ - 管理画面</h1>
+        
+        <!-- ログインフォーム -->
+        <div id="authSection" class="auth-section">
+            <h2>管理者ログイン</h2>
+            <form id="loginForm" class="auth-form">
+                <input type="email" id="email" placeholder="メールアドレス" required>
+                <input type="password" id="password" placeholder="パスワード" required>
+                <button type="submit">ログイン</button>
+            </form>
+            <div id="authMessage" class="message" style="display:none;"></div>
+        </div>
+
+        <!-- 管理パネル -->
+        <div id="adminPanel" class="admin-panel">
+            <button id="logoutBtn" class="logout-btn">ログアウト</button>
+            
+            <h2>パーツ管理</h2>
+            
+            <!-- カテゴリ選択 -->
+            <div class="category-selector">
+                <label for="categorySelect">カテゴリ選択：</label>
+                <select id="categorySelect">
+                    <option value="">カテゴリを選択</option>
+                    <option value="hair">髪</option>
+                    <option value="outline">輪郭</option>
+                    <option value="eye">目</option>
+                    <option value="eyebrow">眉毛</option>
+                    <option value="nose">鼻</option>
+                    <option value="mouse">口</option>
+                    <option value="ear">耳</option>
+                    <option value="beard">ひげ</option>
+                    <option value="glasses">メガネ</option>
+                    <option value="acc">アクセサリー</option>
+                    <option value="wrinkles">しわ</option>
+                    <option value="extras">その他</option>
+                </select>
+            </div>
+
+            <!-- アップロードセクション -->
+            <div class="upload-section" style="display:none;" id="uploadSection">
+                <h3>新しいパーツをアップロード</h3>
+                <form id="uploadForm" class="upload-form">
+                    <input type="file" id="partFile" accept=".svg,image/*" required>
+                    <input type="text" id="partName" placeholder="パーツ名" required>
+                    <button type="submit">アップロード</button>
+                </form>
+            </div>
+
+            <!-- パーツリスト -->
+            <div id="partsList" class="parts-list"></div>
+            
+            <div id="message" class="message" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        
+        // Supabase設定（環境変数から読み込む）
+        const SUPABASE_URL = 'https://jxiupulycxwkrxdgpztg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4aXVwdWx5Y3h3a3J4ZGdwenRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNDYzNTgsImV4cCI6MjA3MDcyMjM1OH0.OaryIfcvg8Fj2prudy3MkXhZBtjTl0Wb9SbS1wdL7UY';
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // DOM要素
+        const authSection = document.getElementById('authSection');
+        const adminPanel = document.getElementById('adminPanel');
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const categorySelect = document.getElementById('categorySelect');
+        const uploadSection = document.getElementById('uploadSection');
+        const uploadForm = document.getElementById('uploadForm');
+        const partsList = document.getElementById('partsList');
+        const message = document.getElementById('message');
+        const authMessage = document.getElementById('authMessage');
+        
+        // 認証状態確認
+        async function checkAuth() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                showAdminPanel();
+            } else {
+                showAuthSection();
+            }
+        }
+        
+        // ログイン処理
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+            
+            if (error) {
+                showAuthMessage('ログインに失敗しました: ' + error.message, 'error');
+            } else {
+                showAdminPanel();
+            }
+        });
+        
+        // ログアウト処理
+        logoutBtn.addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            showAuthSection();
+        });
+        
+        // カテゴリ選択時の処理
+        categorySelect.addEventListener('change', async (e) => {
+            const category = e.target.value;
+            if (category) {
+                uploadSection.style.display = 'block';
+                await loadParts(category);
+            } else {
+                uploadSection.style.display = 'none';
+                partsList.innerHTML = '';
+            }
+        });
+        
+        // パーツアップロード処理
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const category = categorySelect.value;
+            const file = document.getElementById('partFile').files[0];
+            const name = document.getElementById('partName').value;
+            
+            if (!category || !file || !name) {
+                showMessage('すべてのフィールドを入力してください', 'error');
+                return;
+            }
+            
+            try {
+                // ファイルをStorage にアップロード
+                const fileName = `${category}/${Date.now()}_${file.name}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('parts')
+                    .upload(fileName, file);
+                
+                if (uploadError) throw uploadError;
+                
+                // パブリックURLを取得
+                const { data: { publicUrl } } = supabase.storage
+                    .from('parts')
+                    .getPublicUrl(fileName);
+                
+                // データベースに保存
+                const { data, error } = await supabase
+                    .from('parts')
+                    .insert([{
+                        category_id: category,
+                        file_name: file.name,
+                        display_name: name,
+                        image_url: publicUrl
+                    }]);
+                
+                if (error) throw error;
+                
+                showMessage('パーツをアップロードしました', 'success');
+                uploadForm.reset();
+                await loadParts(category);
+            } catch (error) {
+                showMessage('アップロードに失敗しました: ' + error.message, 'error');
+            }
+        });
+        
+        // パーツ読み込み
+        async function loadParts(category) {
+            try {
+                const { data, error } = await supabase
+                    .from('parts')
+                    .select('*')
+                    .eq('category_id', category)
+                    .eq('is_active', true)
+                    .order('display_order');
+                
+                if (error) throw error;
+                
+                displayParts(data || []);
+            } catch (error) {
+                showMessage('パーツの読み込みに失敗しました: ' + error.message, 'error');
+            }
+        }
+        
+        // パーツ表示
+        function displayParts(parts) {
+            if (parts.length === 0) {
+                partsList.innerHTML = '<p>パーツがありません</p>';
+                return;
+            }
+            
+            partsList.innerHTML = parts.map(part => `
+                <div class="part-item">
+                    <img src="${part.image_url}" alt="${part.display_name}">
+                    <p>${part.display_name}</p>
+                    <button onclick="deletePart('${part.id}')">削除</button>
+                </div>
+            `).join('');
+        }
+        
+        // パーツ削除
+        window.deletePart = async (id) => {
+            if (!confirm('このパーツを削除しますか？')) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('parts')
+                    .update({ is_active: false })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                showMessage('パーツを削除しました', 'success');
+                await loadParts(categorySelect.value);
+            } catch (error) {
+                showMessage('削除に失敗しました: ' + error.message, 'error');
+            }
+        };
+        
+        // UI表示切り替え
+        function showAuthSection() {
+            authSection.style.display = 'block';
+            adminPanel.classList.remove('active');
+        }
+        
+        function showAdminPanel() {
+            authSection.style.display = 'none';
+            adminPanel.classList.add('active');
+        }
+        
+        // メッセージ表示
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 3000);
+        }
+        
+        function showAuthMessage(text, type) {
+            authMessage.textContent = text;
+            authMessage.className = `message ${type}`;
+            authMessage.style.display = 'block';
+            setTimeout(() => {
+                authMessage.style.display = 'none';
+            }, 3000);
+        }
+        
+        // 初期化
+        checkAuth();
+    </script>
+</body>
+</html>

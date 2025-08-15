@@ -1,0 +1,24 @@
+# 環境変数（APIキーなど機密情報）
+.env
+.env.local
+.env.production
+
+# 依存関係（自動生成されるファイル）
+node_modules/
+
+# OS関連
+.DS_Store
+Thumbs.db
+
+# エディタ設定
+.vscode/
+.idea/
+
+# ログファイル
+*.log
+npm-debug.log*
+
+# テンポラリファイル
+*.tmp
+*.temp
+.cache/

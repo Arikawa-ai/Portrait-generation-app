@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>写真一覧 - 似顔絵作成アプリ</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .photo-list-container {
+            max-width: 95vw;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .header-section {
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .header-nav {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .nav-link {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .nav-link:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .stats-section {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 60px; /* 最小高さを確保 */
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        /* テーブルスタイル */
+        .photo-table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+            height: 70vh; /* 画面の70%の高さを使用 */
+        }
+        
+        .table-scroll-wrapper {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        
+        /* カスタムスクロールバー */
+        .table-scroll-wrapper::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .table-scroll-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        
+        .table-scroll-wrapper::-webkit-scrollbar-thumb {
+            background: #007bff;
+            border-radius: 6px;
+            transition: background 0.2s ease;
+        }
+        
+        .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #0056b3;
+        }
+        
+        .photo-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 16px; /* フォントサイズを大きく */
+            min-width: 1200px; /* 最小幅を拡大（新しい列追加のため） */
+        }
+        
+        .photo-table th,
+        .photo-table td {
+            padding: 18px 15px; /* パディングを大きく */
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle; /* 垂直中央揃え */
+        }
+        
+        .photo-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .photo-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        /* スクロール位置インジケーター */
+        .scroll-indicator {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: rgba(0,0,0,0.1);
+            z-index: 5;
+        }
+        
+        .scroll-progress {
+            width: 100%;
+            background: #007bff;
+            transition: height 0.1s ease;
+            border-radius: 2px;
+        }
+        
+        .photo-thumbnail {
+            width: 100px; /* 画像サイズを大きく */
+            height: 100px; /* 画像サイズを大きく */
+            object-fit: contain;
+            border-radius: 6px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .photo-thumbnail:hover {
+            transform: scale(1.05); /* ホバー時の拡大効果 */
+        }
+        
+        .photo-id {
+            font-weight: bold;
+            color: #007bff;
+            font-size: 18px; /* IDのフォントサイズを大きく */
+        }
+        
+        .photo-status {
+            padding: 6px 16px; /* ステータスバッジを大きく */
+            border-radius: 20px;
+            font-size: 13px; /* ステータスフォントサイズを少し大きく */
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status-completed {
+            background: #d1eddd;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-small {
+            padding: 8px 12px; /* ボタンを大きく */
+            font-size: 13px; /* ボタンのフォントサイズを大きく */
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .btn-small.btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-small.btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-small.btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-small.btn-success:hover {
+            background: #1e7e34;
+        }
+        
+        .btn-small.btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-small.btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .photo-date {
+            color: #6c757d;
+            font-size: 14px; /* 日付のフォントサイズを大きく */
+            line-height: 1.4;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #d63031;
+            background: #ffeaa7;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #007bff;
+            color: white;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        
+        .refresh-btn:hover {
+            background: #0056b3;
+            transform: scale(1.1);
+        }
+        
+        /* スクロールコントロール */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .pagination button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .pagination .page-info {
+            flex: 1;
+            text-align: center;
+            font-weight: 500;
+            color: #495057;
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 6px;
+        }
+        
+        /* スクロール位置を表示するミニマップ */
+        .scroll-minimap {
+            position: fixed;
+            top: 50%;
+            right: 15px;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 200px;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            z-index: 999;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .scroll-minimap-thumb {
+            width: 100%;
+            background: #007bff;
+            border-radius: 10px;
+            transition: all 0.1s ease;
+            min-height: 20px;
+        }
+        
+        /* スムーズスクロール効果 */
+        .table-scroll-wrapper {
+            scroll-behavior: smooth;
+        }
+        
+        /* 更新されたアイテムのハイライト */
+        .highlight-updated {
+            background: linear-gradient(90deg, #fff3cd, #ffeaa7) !important;
+            border: 2px solid #28a745 !important;
+            box-shadow: 0 0 15px rgba(40, 167, 69, 0.3) !important;
+            animation: pulse-highlight 2s ease-in-out;
+        }
+        
+        @keyframes pulse-highlight {
+            0% { 
+                background: #28a745;
+                transform: scale(1.02);
+            }
+            50% {
+                background: linear-gradient(90deg, #fff3cd, #ffeaa7);
+                transform: scale(1.01);
+            }
+            100% { 
+                background: linear-gradient(90deg, #fff3cd, #ffeaa7);
+                transform: scale(1);
+            }
+        }
+        
+        /* 成功メッセージバナー */
+        .success-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            animation: slide-down 0.5s ease-out;
+        }
+        
+        @keyframes slide-down {
+            from {
+                transform: translateY(-100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="photo-list-container">
+        <div class="header-section">
+            <div class="header-content">
+                <h1>写真一覧</h1>
+                <nav class="header-nav">
+                    <a href="photo-list.html" class="nav-link">📸 写真一覧</a>
+                    <a href="app.html" class="nav-link">🎨 似顔絵作成</a>
+                </nav>
+            </div>
+            <p>登録されている写真から選択して似顔絵を作成できます</p>
+        </div>
+        
+        <div class="stats-section" id="statsSection">
+            <div class="stat-item">
+                <div class="stat-number" id="totalCount">-</div>
+                <div class="stat-label">総写真数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="pendingCount">-</div>
+                <div class="stat-label">未作成</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="completedCount">-</div>
+                <div class="stat-label">作成済</div>
+            </div>
+        </div>
+        
+        <div class="filter-section">
+            <div class="filter-group">
+                <label for="statusFilter">ステータス:</label>
+                <select id="statusFilter">
+                    <option value="">すべて</option>
+                    <option value="未作成">未作成</option>
+                    <option value="作成済">作成済</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="sortOrder">並び順:</label>
+                <select id="sortOrder">
+                    <option value="id_asc">ID順（昇順）</option>
+                    <option value="id_desc">ID順（降順）</option>
+                    <option value="date_desc">更新日時（新しい順）</option>
+                    <option value="date_asc">更新日時（古い順）</option>
+                </select>
+            </div>
+            <button onclick="loadPhotos()" class="btn btn-primary">🔄 更新</button>
+            <button onclick="manualCleanup()" class="btn btn-primary" style="background: #dc3545; color: white;">🧹 データクリーンアップ</button>
+            <button onclick="exportDatabaseAsJSON()" class="btn btn-primary" style="background: #28a745; color: white; margin: 2px;">📄 JSONエクスポート</button>
+            <button onclick="exportDatabaseAsCSV()" class="btn btn-primary" style="background: #17a2b8; color: white; margin: 2px;">📊 CSVエクスポート</button>
+            <button onclick="openImportDialog()" class="btn btn-primary" style="background: #6f42c1; color: white; margin: 2px;">📂 JSONインポート</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            読み込み中...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div class="photo-table-container">
+            <div class="scroll-indicator">
+                <div class="scroll-progress" id="scrollProgress"></div>
+            </div>
+            <div class="table-scroll-wrapper" id="tableScrollWrapper">
+                <table class="photo-table" id="photoTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 130px;">写真</th>
+                            <th style="width: 90px;">ID</th>
+                            <th style="width: 120px;">ステータス</th>
+                            <th style="width: 180px;">更新日時</th>
+                            <th style="width: 130px;">似顔絵</th>
+                            <th style="width: 100px;">JSONデータ</th>
+                            <th style="width: 220px;">アクション</th>
+                            <th>写真URL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="photoTableBody">
+                        <!-- 写真データがここに動的に表示されます -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="pagination" id="pagination">
+            <button onclick="scrollToTop()" class="btn btn-primary">⬆ 先頭へ</button>
+            <span class="page-info" id="pageInfo">読み込み中...</span>
+            <button onclick="scrollToBottom()" class="btn btn-primary">⬇ 最後へ</button>
+        </div>
+    </div>
+    
+    <button class="refresh-btn" onclick="loadPhotos()" title="データを更新">
+        ↻
+    </button>
+    
+    <!-- スクロールミニマップ -->
+    <div class="scroll-minimap" id="scrollMinimap">
+        <div class="scroll-minimap-thumb" id="scrollMinimapThumb"></div>
+    </div>
+
+    <!-- インポート用の隠しファイル入力 -->
+    <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    
+    <script>
+        let allPhotos = [];
+        let filteredPhotos = [];
+        
+        // 有効なJSONデータかどうかを判定する関数
+        function hasValidJsonData(jsonData) {
+            if (!jsonData || jsonData === null) return false;
+            if (typeof jsonData !== 'object') return false;
+            if (Array.isArray(jsonData) && jsonData.length === 0) return false;
+            if (Object.keys(jsonData).length === 0) return false;
+            
+            // 実際にパーツデータが含まれているかチェック
+            if (jsonData.parts && typeof jsonData.parts === 'object') {
+                return Object.keys(jsonData.parts).length > 0;
+            }
+            
+            return false;
+        }
+        
+        // 作成済みかどうかを判定する関数（より厳密）
+        function isCompleted(photo) {
+            return photo.status === '作成済' && 
+                   photo.portrait_url && 
+                   photo.portrait_url.trim() !== '' &&
+                   hasValidJsonData(photo.json_data);
+        }
+        
+        // Supabase初期化を待つ関数
+        async function waitForSupabaseInitialization() {
+            return new Promise((resolve) => {
+                // 既に初期化済みの場合はすぐに解決
+                if (window.supabase && typeof window.supabase.from === 'function') {
+                    resolve();
+                    return;
+                }
+                
+                // 定期的にチェック（最大10秒）
+                let attempts = 0;
+                const maxAttempts = 100;
+                const checkInterval = setInterval(() => {
+                    attempts++;
+                    if (window.supabase && typeof window.supabase.from === 'function') {
+                        clearInterval(checkInterval);
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        console.error('Supabase初期化タイムアウト');
+                        clearInterval(checkInterval);
+                        resolve(); // エラーでも続行
+                    }
+                }, 100);
+            });
+        }
+        
+        // ページ読み込み時に写真リストを取得
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Supabase初期化を待つ
+            await waitForSupabaseInitialization();
+            
+            // 更新パラメータを最初にチェック
+            const urlParams = new URLSearchParams(window.location.search);
+            const updatedPhotoId = urlParams.get('updated');
+            
+            if (updatedPhotoId) {
+                showSuccessBanner(updatedPhotoId);
+                // URLからパラメータを削除
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+            
+            // データを読み込み
+            await loadPhotos();
+            
+            // データ読み込み完了後にハイライト表示
+            if (updatedPhotoId) {
+                setTimeout(() => {
+                    highlightUpdatedPhoto(updatedPhotoId);
+                }, 500);
+            }
+            
+            setupScrollIndicator();
+            setupCrossTabUpdates();
+        });
+        
+        // 写真データを読み込む
+        async function loadPhotos() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const photoTableBody = document.getElementById('photoTableBody');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            photoTableBody.innerHTML = '';
+            
+            try {
+                // Supabaseクライアントの確認
+                if (!window.supabase) {
+                    throw new Error('Supabaseクライアントが初期化されていません');
+                }
+                
+                const { data: photos, error: fetchError } = await window.supabase
+                    .from('portrait_db')
+                    .select('*')
+                    .order('picture_id', { ascending: true });
+                
+                if (fetchError) {
+                    throw fetchError;
+                }
+                
+                
+                allPhotos = photos || [];
+                updateStats();
+                applyFiltersAndDisplay();
+                
+            } catch (err) {
+                console.error('データ取得エラー:', err);
+                error.textContent = `エラー: ${err.message}`;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        // 統計情報を更新
+        function updateStats() {
+            const total = allPhotos.length;
+            const completed = allPhotos.filter(photo => isCompleted(photo)).length;
+            const pending = total - completed;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('completedCount').textContent = completed;
+        }
+        
+        // フィルターとソートを適用して表示
+        function applyFiltersAndDisplay() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const sortOrder = document.getElementById('sortOrder').value;
+            
+            // フィルタリング
+            filteredPhotos = allPhotos;
+            if (statusFilter) {
+                if (statusFilter === '作成済') {
+                    filteredPhotos = allPhotos.filter(photo => isCompleted(photo));
+                } else if (statusFilter === '未作成') {
+                    filteredPhotos = allPhotos.filter(photo => !isCompleted(photo));
+                }
+            }
+            
+            // ソート
+            filteredPhotos.sort((a, b) => {
+                switch (sortOrder) {
+                    case 'id_desc':
+                        return b.picture_id - a.picture_id;
+                    case 'date_desc':
+                        return new Date(b.updated_at) - new Date(a.updated_at);
+                    case 'date_asc':
+                        return new Date(a.updated_at) - new Date(b.updated_at);
+                    default: // 'id_asc'
+                        return a.picture_id - b.picture_id;
+                }
+            });
+            
+            displayPhotos();
+            updatePagination();
+        }
+        
+        // 写真を表示（全件表示でスクロール対応）
+        function displayPhotos() {
+            const photoTableBody = document.getElementById('photoTableBody');
+            
+            if (filteredPhotos.length === 0) {
+                photoTableBody.innerHTML = '<tr><td colspan="8" class="error" style="text-align: center; padding: 40px;">該当する写真がありません</td></tr>';
+                return;
+            }
+            
+            photoTableBody.innerHTML = '';
+            
+            // 全てのフィルター済み写真を表示
+            filteredPhotos.forEach(photo => {
+                const row = createPhotoRow(photo);
+                photoTableBody.appendChild(row);
+            });
+            
+            // スクロール位置をリセット
+            const scrollWrapper = document.getElementById('tableScrollWrapper');
+            scrollWrapper.scrollTop = 0;
+        }
+        
+        // 写真の行を作成
+        function createPhotoRow(photo) {
+            const row = document.createElement('tr');
+            
+            // 実際の作成状態を判定
+            const actuallyCompleted = isCompleted(photo);
+            
+            
+            const statusClass = actuallyCompleted ? 'status-completed' : 'status-pending';
+            const formattedDate = new Date(photo.updated_at).toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // URLを短縮表示
+            const shortUrl = photo.picture_url.length > 50 ? 
+                photo.picture_url.substring(0, 47) + '...' : 
+                photo.picture_url;
+            
+            // 似顔絵サムネイル表示の準備（厳密な判定を使用）
+            const portraitThumbnail = actuallyCompleted ? 
+                `<img src="${photo.portrait_url}" alt="似顔絵 ${photo.picture_id}" class="photo-thumbnail" 
+                     title="クリックで拡大表示" onclick="openImageModal('${photo.portrait_url}', ${photo.picture_id}, '似顔絵')">` : 
+                '';
+            
+            // JSONデータダウンロードリンクの準備（厳密な判定を使用）
+            const jsonDownload = actuallyCompleted ?
+                `<button onclick="downloadJsonData(${photo.picture_id})" class="btn-small btn-primary" title="JSONデータをダウンロード">
+                    📄 JSON
+                </button>` :
+                '';
+                
+
+            row.innerHTML = `
+                <td>
+                    <img src="${photo.picture_url}" alt="写真 ${photo.picture_id}" class="photo-thumbnail" 
+                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk4vQTwvdGV4dD48L3N2Zz4='" title="クリックで拡大表示" onclick="openImageModal('${photo.picture_url}', ${photo.picture_id}, '元写真')">
+                </td>
+                <td><span class="photo-id">${photo.picture_id}</span></td>
+                <td><span class="photo-status ${statusClass}">${actuallyCompleted ? '作成済' : '未作成'}</span></td>
+                <td><span class="photo-date">${formattedDate}</span></td>
+                <td>
+                    ${portraitThumbnail}
+                </td>
+                <td>
+                    ${jsonDownload}
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="index.html?photo_id=${photo.picture_id}" class="btn-small btn-primary">
+                            似顔絵作成
+                        </a>
+                        ${actuallyCompleted ? 
+                            `<a href="${photo.portrait_url}" target="_blank" class="btn-small btn-success">似顔絵表示</a>
+                             <button onclick="cancelPortrait(${photo.picture_id})" class="btn-small btn-danger">
+                                取り消し
+                             </button>` : 
+                            ''
+                        }
+                    </div>
+                </td>
+                <td>
+                    <span title="${photo.picture_url}" style="cursor: help;">${shortUrl}</span>
+                </td>
+            `;
+            
+            return row;
+        }
+        
+        // 画像拡大表示モーダル
+        function openImageModal(imageUrl, photoId, type = '写真') {
+            // モーダル作成
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.85);
+                z-index: 2000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                backdrop-filter: blur(4px);
+            `;
+            
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.style.cssText = `
+                max-width: 90%;
+                max-height: 90%;
+                width: auto;
+                height: auto;
+                object-fit: contain;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                background: #f8f9fa;
+            `;
+            
+            const caption = document.createElement('div');
+            caption.textContent = `${type} ID: ${photoId}`;
+            caption.style.cssText = `
+                position: absolute;
+                bottom: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                color: white;
+                font-size: 18px;
+                font-weight: 600;
+                background: rgba(0,0,0,0.7);
+                padding: 12px 24px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                backdrop-filter: blur(4px);
+            `;
+            
+            modal.appendChild(img);
+            modal.appendChild(caption);
+            document.body.appendChild(modal);
+            
+            // クリックで閉じる
+            modal.addEventListener('click', function() {
+                document.body.removeChild(modal);
+                document.removeEventListener('keydown', escapeHandler);
+            });
+            
+            // ESCキーで閉じる
+            const escapeHandler = function(e) {
+                if (e.key === 'Escape') {
+                    if (document.body.contains(modal)) {
+                        document.body.removeChild(modal);
+                    }
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        }
+        
+        // スクロール情報を更新
+        function updatePagination() {
+            const pageInfo = document.getElementById('pageInfo');
+            pageInfo.textContent = `${filteredPhotos.length}件表示中（スクロールして閲覧）`;
+        }
+        
+        // スクロールインジケーターの設定
+        function setupScrollIndicator() {
+            const scrollWrapper = document.getElementById('tableScrollWrapper');
+            const scrollProgress = document.getElementById('scrollProgress');
+            const minimapThumb = document.getElementById('scrollMinimapThumb');
+            const minimap = document.getElementById('scrollMinimap');
+            
+            scrollWrapper.addEventListener('scroll', function() {
+                const scrollTop = scrollWrapper.scrollTop;
+                const scrollHeight = scrollWrapper.scrollHeight - scrollWrapper.clientHeight;
+                const scrollPercent = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
+                
+                // 右側のスクロールインジケーター
+                scrollProgress.style.height = scrollPercent + '%';
+                
+                // ミニマップの更新
+                updateMinimap(scrollTop, scrollHeight);
+            });
+            
+            // ミニマップクリックでスクロール位置移動
+            minimap.addEventListener('click', function(e) {
+                const rect = minimap.getBoundingClientRect();
+                const clickY = e.clientY - rect.top;
+                const percent = clickY / rect.height;
+                const scrollHeight = scrollWrapper.scrollHeight - scrollWrapper.clientHeight;
+                const targetScroll = percent * scrollHeight;
+                
+                scrollWrapper.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+            });
+        }
+        
+        // ミニマップの更新
+        function updateMinimap(scrollTop, scrollHeight) {
+            const minimapThumb = document.getElementById('scrollMinimapThumb');
+            const scrollWrapper = document.getElementById('tableScrollWrapper');
+            
+            if (scrollHeight <= 0) {
+                minimapThumb.style.height = '100%';
+                minimapThumb.style.top = '0px';
+                return;
+            }
+            
+            // 表示領域の割合を計算
+            const viewHeight = scrollWrapper.clientHeight;
+            const totalHeight = scrollWrapper.scrollHeight;
+            const thumbHeight = Math.max((viewHeight / totalHeight) * 100, 10); // 最小10%
+            const thumbTop = (scrollTop / totalHeight) * 100;
+            
+            minimapThumb.style.height = thumbHeight + '%';
+            minimapThumb.style.top = thumbTop + '%';
+        }
+        
+        // スクロール関連のユーティリティ関数
+        function scrollToTop() {
+            const scrollWrapper = document.getElementById('tableScrollWrapper');
+            scrollWrapper.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+        
+        function scrollToBottom() {
+            const scrollWrapper = document.getElementById('tableScrollWrapper');
+            scrollWrapper.scrollTo({
+                top: scrollWrapper.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+        
+        // フィルターやソート変更時に再表示
+        document.getElementById('statusFilter').addEventListener('change', applyFiltersAndDisplay);
+        document.getElementById('sortOrder').addEventListener('change', applyFiltersAndDisplay);
+        
+        // 似顔絵取り消し処理
+        async function cancelPortrait(pictureId) {
+            if (!confirm('この似顔絵を取り消しますか？この操作は元に戻せません。')) {
+                return;
+            }
+            
+            try {
+                
+                // 該当する写真データを取得
+                const targetPhoto = allPhotos.find(photo => photo.picture_id === pictureId);
+                if (!targetPhoto) {
+                    throw new Error('写真データが見つかりません');
+                }
+                
+                // Supabaseストレージから似顔絵画像を削除
+                if (targetPhoto.portrait_url) {
+                    console.log('ストレージから似顔絵画像を削除中...');
+                    
+                    // URLからファイル名を抽出
+                    const urlParts = targetPhoto.portrait_url.split('/');
+                    const fileName = urlParts[urlParts.length - 1];
+                    
+                    const { error: deleteError } = await supabase.storage
+                        .from('pictures')
+                        .remove([fileName]);
+                    
+                    if (deleteError) {
+                        console.warn('ストレージ削除エラー (続行):', deleteError.message);
+                    } else {
+                        console.log('ストレージから削除完了');
+                    }
+                }
+                
+                // データベースを更新（未作成状態に戻す）
+                console.log('データベースを更新中...');
+                const { data: updateData, error: updateError } = await supabase
+                    .from('portrait_db')
+                    .update({
+                        status: '未作成',
+                        portrait_url: null,
+                        json_data: null,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('picture_id', pictureId);
+                
+                if (updateError) {
+                    throw new Error(`データベース更新エラー: ${updateError.message}`);
+                }
+                
+                console.log('データベース更新完了');
+                
+                // 他のタブに通知
+                notifyOtherTabs('portrait_updated', {
+                    picture_id: pictureId,
+                    status: '未作成',
+                    portrait_url: null,
+                    updated_at: new Date().toISOString()
+                });
+                
+                // 成功通知とデータ再読み込み
+                alert('似顔絵を取り消しました');
+                loadPhotos(); // データを再読み込み
+                
+            } catch (error) {
+                console.error('似顔絵取り消し処理エラー:', error);
+                alert(`取り消し処理でエラーが発生しました: ${error.message}`);
+            }
+        }
+        
+        // タブ間更新の設定
+        function setupCrossTabUpdates() {
+            // BroadcastChannelでのタブ間通信
+            if (typeof BroadcastChannel !== 'undefined') {
+                const channel = new BroadcastChannel('portrait_app_updates');
+                channel.addEventListener('message', function(event) {
+                    console.log('BroadcastChannelで更新通知受信:', event.data);
+                    handleCrossTabUpdate(event.data);
+                });
+            }
+            
+            // LocalStorageイベントでのフォールバック
+            window.addEventListener('storage', function(event) {
+                if (event.key === 'portrait_app_last_update' && event.newValue) {
+                    try {
+                        const updateData = JSON.parse(event.newValue);
+                        console.log('LocalStorageで更新通知受信:', updateData);
+                        handleCrossTabUpdate(updateData);
+                    } catch (error) {
+                        console.error('LocalStorage更新通知の解析エラー:', error);
+                    }
+                }
+            });
+        }
+        
+        // クロスタブ更新を処理
+        function handleCrossTabUpdate(updateData) {
+            if (!updateData || !updateData.type || !updateData.data) {
+                return;
+            }
+            
+            switch (updateData.type) {
+                case 'portrait_updated':
+                    handlePortraitUpdate(updateData.data);
+                    break;
+                default:
+                    console.log('未知の更新タイプ:', updateData.type);
+            }
+        }
+        
+        // 似顔絵更新の処理
+        function handlePortraitUpdate(updateData) {
+            const { picture_id, status, portrait_url, updated_at } = updateData;
+            
+            // allPhotosから該当する写真を探して更新
+            const photoIndex = allPhotos.findIndex(photo => photo.picture_id === picture_id);
+            if (photoIndex !== -1) {
+                // データを更新
+                allPhotos[photoIndex].status = status;
+                allPhotos[photoIndex].portrait_url = portrait_url;
+                allPhotos[photoIndex].updated_at = updated_at;
+                
+                console.log(`写真ID ${picture_id} のデータを更新しました`);
+                
+                // 統計情報を更新
+                updateStats();
+                
+                // 表示を更新
+                applyFiltersAndDisplay();
+                
+                // 通知を表示
+                showNotification(`写真ID ${picture_id} の似顔絵が他のタブで作成されました`, 'info');
+            } else {
+                // 該当する写真が見つからない場合は全体を再読み込み
+                console.log('該当する写真が見つからないため、データを再読み込みします');
+                loadPhotos();
+            }
+        }
+        
+        // 通知表示関数
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 5px;
+                color: white;
+                font-weight: bold;
+                z-index: 1000;
+                max-width: 300px;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            // タイプに応じて色を変更
+            switch (type) {
+                case 'success':
+                    notification.style.background = '#28a745';
+                    break;
+                case 'error':
+                    notification.style.background = '#dc3545';
+                    break;
+                case 'info':
+                    notification.style.background = '#17a2b8';
+                    break;
+                default:
+                    notification.style.background = '#007bff';
+            }
+            
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // 3秒後に自動的に削除
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 3000);
+        }
+        
+        // JSONデータをダウンロード
+        function downloadJsonData(pictureId) {
+            const photo = allPhotos.find(p => p.picture_id === pictureId);
+            if (!photo || !photo.json_data) {
+                alert('JSONデータが見つかりません');
+                return;
+            }
+            
+            try {
+                // JSON データを整形してダウンロード
+                const jsonString = JSON.stringify(photo.json_data, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `portrait_data_${pictureId}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // メモリリークを防ぐためURLを解放
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                console.log(`JSONデータをダウンロード: 写真ID ${pictureId}`);
+                
+            } catch (error) {
+                console.error('JSONダウンロードエラー:', error);
+                alert('JSONデータのダウンロードに失敗しました');
+            }
+        }
+        
+        // 他のタブに更新を通知
+        function notifyOtherTabs(eventType, data) {
+            try {
+                // BroadcastChannelを使用してタブ間通信
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const channel = new BroadcastChannel('portrait_app_updates');
+                    channel.postMessage({
+                        type: eventType,
+                        data: data,
+                        timestamp: new Date().toISOString()
+                    });
+                    console.log('BroadcastChannelでタブ間通知送信:', eventType, data);
+                }
+                
+                // LocalStorageを使用したフォールバック
+                const updateEvent = {
+                    type: eventType,
+                    data: data,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('portrait_app_last_update', JSON.stringify(updateEvent));
+                console.log('LocalStorageでタブ間通知送信:', eventType, data);
+                
+            } catch (error) {
+                console.error('タブ間通知の送信に失敗:', error);
+            }
+        }
+        
+        
+        // 成功バナーを表示
+        function showSuccessBanner(photoId) {
+            const banner = document.createElement('div');
+            banner.className = 'success-banner';
+            banner.innerHTML = `
+                🎉 写真ID ${photoId} の似顔絵が正常に保存されました！ 
+                <button onclick="removeBanner(this)" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 5px 10px; margin-left: 15px; border-radius: 3px; cursor: pointer;">✕</button>
+            `;
+            
+            document.body.appendChild(banner);
+            
+            // bodyに上部パディングを追加（バナーの高さ分）
+            document.body.style.paddingTop = '60px';
+            
+            // 5秒後に自動的に削除
+            setTimeout(() => {
+                removeBanner(banner);
+            }, 5000);
+        }
+        
+        // バナーを削除する関数
+        function removeBanner(element) {
+            const banner = element.classList ? element : element.parentElement;
+            if (banner && banner.parentNode) {
+                banner.parentNode.removeChild(banner);
+                // bodyのパディングを元に戻す
+                document.body.style.paddingTop = '0';
+            }
+        }
+        
+        // 更新された写真をハイライト表示
+        function highlightUpdatedPhoto(photoId) {
+            console.log(`ハイライト表示を開始: 写真ID ${photoId}`);
+            
+            // データが存在することを確認
+            const targetPhoto = allPhotos.find(photo => photo.picture_id == photoId);
+            if (!targetPhoto) {
+                console.warn(`写真ID ${photoId} がデータに見つかりません`);
+                return;
+            }
+            
+            console.log(`写真データ確認OK:`, targetPhoto);
+            console.log(`詳細情報:`, {
+                status: targetPhoto.status,
+                portrait_url: targetPhoto.portrait_url,
+                json_data_exists: !!targetPhoto.json_data,
+                json_data_content: targetPhoto.json_data
+            });
+            
+            const photoRows = document.querySelectorAll('#photoTableBody tr');
+            console.log(`テーブル行数: ${photoRows.length}`);
+            
+            let found = false;
+            photoRows.forEach(row => {
+                const idCell = row.querySelector('.photo-id');
+                if (idCell && idCell.textContent === photoId) {
+                    found = true;
+                    console.log(`該当する行を発見: 写真ID ${photoId}`);
+                    
+                    // ハイライトクラスを追加
+                    row.classList.add('highlight-updated');
+                    
+                    // その行までスクロール
+                    const scrollWrapper = document.getElementById('tableScrollWrapper');
+                    const rowRect = row.getBoundingClientRect();
+                    const wrapperRect = scrollWrapper.getBoundingClientRect();
+                    
+                    if (rowRect.top < wrapperRect.top || rowRect.bottom > wrapperRect.bottom) {
+                        row.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+                    }
+                    
+                    console.log(`写真ID ${photoId} をハイライト表示しました`);
+                    
+                    // 10秒後にハイライトを削除
+                    setTimeout(() => {
+                        row.classList.remove('highlight-updated');
+                    }, 10000);
+                    
+                    return;
+                }
+            });
+            
+            if (!found) {
+                console.warn(`写真ID ${photoId} の行が見つかりませんでした`);
+            }
+        }
+        
+        // 空のJSONデータをクリーンアップする関数
+        async function cleanupEmptyJsonData() {
+            if (!window.supabase) {
+                console.error('Supabaseクライアントが利用できません');
+                return;
+            }
+            
+            try {
+                console.log('空のJSONデータクリーンアップを開始...');
+                
+                // まず、status='未作成'でjson_dataがnull以外のレコードを取得
+                const { data: records, error: fetchError } = await window.supabase
+                    .from('portrait_db')
+                    .select('picture_id, json_data, status')
+                    .neq('json_data', null);
+                
+                if (fetchError) {
+                    console.error('データ取得エラー:', fetchError);
+                    return;
+                }
+                
+                // 空のJSONオブジェクト、空の配列、または無効なデータを持つレコードを特定
+                const toCleanup = records.filter(record => {
+                    if (record.status === '作成済') return false; // 作成済みはスキップ
+                    if (!record.json_data) return false; // 既にnullはスキップ
+                    
+                    // 空のオブジェクトまたは無効なデータかチェック
+                    return !hasValidJsonData(record.json_data);
+                });
+                
+                console.log('クリーンアップ対象:', toCleanup.length, '件');
+                
+                if (toCleanup.length === 0) {
+                    console.log('クリーンアップ対象がありません');
+                    return;
+                }
+                
+                // 対象レコードのjson_dataをnullに更新
+                const updatePromises = toCleanup.map(record => 
+                    window.supabase
+                        .from('portrait_db')
+                        .update({ json_data: null })
+                        .eq('picture_id', record.picture_id)
+                );
+                
+                const results = await Promise.all(updatePromises);
+                const errors = results.filter(result => result.error);
+                
+                if (errors.length > 0) {
+                    console.error('一部の更新でエラーが発生:', errors);
+                }
+                
+                console.log('クリーンアップ完了:', toCleanup.length - errors.length, '件更新');
+                
+                // データを再読み込み
+                await loadPhotos();
+                
+            } catch (error) {
+                console.error('クリーンアップ処理エラー:', error);
+            }
+        }
+        
+        // 手動クリーンアップボタン用の関数
+        async function manualCleanup() {
+            if (confirm('空のJSONデータをクリーンアップしますか？')) {
+                await cleanupEmptyJsonData();
+                alert('クリーンアップが完了しました');
+            }
+        }
+        
+        // データベース全体をJSONでエクスポート
+        async function exportDatabaseAsJSON() {
+            try {
+                
+                // 最新データを取得
+                const { data: allData, error } = await window.supabase
+                    .from('portrait_db')
+                    .select('*')
+                    .order('picture_id', { ascending: true });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                // エクスポート用データを構造化
+                const formattedData = allData.map(photo => ({
+                    picture_id: photo.picture_id,
+                    picture_data: {
+                        url: photo.picture_url,
+                        image_base64: null // 写真データは現在URLのみ
+                    },
+                    status: photo.status,
+                    portrait_data: {
+                        url: photo.portrait_url,
+                        image_base64: null // 似顔絵データは現在URLのみ
+                    },
+                    json_data: photo.json_data, // JSONデータの内容
+                    updated_at: photo.updated_at,
+                    created_at: photo.created_at
+                }));
+                
+                // エクスポートデータを準備
+                const exportData = {
+                    format_version: "1.0",
+                    exported_at: new Date().toISOString(),
+                    total_records: allData.length,
+                    completed_portraits: allData.filter(photo => isCompleted(photo)).length,
+                    pending_portraits: allData.filter(photo => !isCompleted(photo)).length,
+                    data: formattedData
+                };
+                
+                // JSONファイルとしてダウンロード
+                const jsonString = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `portrait_database_export_${timestamp}.json`;
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // メモリクリーンアップ
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification(`データベースをJSONファイルとしてエクスポートしました (${allData.length}件)`, 'success');
+                
+            } catch (error) {
+                console.error('JSONエクスポートエラー:', error);
+                showNotification('JSONエクスポートに失敗しました: ' + error.message, 'error');
+            }
+        }
+        
+        // データベース全体をCSVでエクスポート
+        async function exportDatabaseAsCSV() {
+            try {
+                
+                // 最新データを取得
+                const { data: allData, error } = await window.supabase
+                    .from('portrait_db')
+                    .select('*')
+                    .order('picture_id', { ascending: true });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                // CSVヘッダー
+                const headers = [
+                    '写真ID',
+                    '写真URL',
+                    'ステータス',
+                    '似顔絵URL',
+                    'JSONデータ有無',
+                    'JSONデータ内容',
+                    '更新日時',
+                    '作成日時'
+                ];
+                
+                // CSVデータ行を生成
+                const csvRows = allData.map(photo => [
+                    photo.picture_id || '',
+                    photo.picture_url || '',
+                    photo.status || '',
+                    photo.portrait_url || '',
+                    hasValidJsonData(photo.json_data) ? 'あり' : 'なし',
+                    photo.json_data ? JSON.stringify(photo.json_data).replace(/"/g, '""') : '',
+                    photo.updated_at || '',
+                    photo.created_at || ''
+                ]);
+                
+                // CSVの内容を作成
+                const csvContent = [
+                    headers.join(','),
+                    ...csvRows.map(row => 
+                        row.map(cell => 
+                            typeof cell === 'string' && cell.includes(',') 
+                                ? `"${cell.replace(/"/g, '""')}"` 
+                                : cell
+                        ).join(',')
+                    )
+                ].join('\n');
+                
+                // BOMを追加してExcelで正しく表示されるようにする
+                const bom = '\uFEFF';
+                const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `portrait_database_export_${timestamp}.csv`;
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // メモリクリーンアップ
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification(`データベースをCSVファイルとしてエクスポートしました (${allData.length}件)`, 'success');
+                
+            } catch (error) {
+                console.error('CSVエクスポートエラー:', error);
+                showNotification('CSVエクスポートに失敗しました: ' + error.message, 'error');
+            }
+        }
+        
+        // インポートダイアログを開く
+        function openImportDialog() {
+            const fileInput = document.getElementById('importFileInput');
+            fileInput.onchange = handleImportFile;
+            fileInput.click();
+        }
+        
+        // インポートファイルを処理
+        async function handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            if (file.type !== 'application/json' && !file.name.toLowerCase().endsWith('.json')) {
+                showNotification('JSONファイルを選択してください', 'error');
+                return;
+            }
+            
+            try {
+                
+                const fileContent = await file.text();
+                const importData = JSON.parse(fileContent);
+                
+                // データ形式の検証
+                if (!importData.data || !Array.isArray(importData.data)) {
+                    throw new Error('無効なデータ形式です。正しいエクスポートファイルを選択してください。');
+                }
+                
+                // インポート確認ダイアログ
+                const confirmMessage = `
+データベースインポートの確認
+
+インポートするデータ:
+- 総レコード数: ${importData.data.length}件
+- エクスポート日時: ${importData.exported_at || '不明'}
+- 作成済み似顔絵: ${importData.completed_portraits || '不明'}件
+- 未作成: ${importData.pending_portraits || '不明'}件
+
+注意: 既存のデータは上書きされます。
+続行しますか？
+                `;
+                
+                if (!confirm(confirmMessage.trim())) {
+                    return;
+                }
+                
+                await importDatabaseFromJSON(importData.data);
+                
+            } catch (error) {
+                console.error('インポートファイル処理エラー:', error);
+                showNotification('インポートに失敗しました: ' + error.message, 'error');
+            } finally {
+                // ファイル入力をリセット
+                event.target.value = '';
+            }
+        }
+        
+        // JSONデータからデータベースをインポート
+        async function importDatabaseFromJSON(data) {
+            try {
+                showNotification('データベースインポート中...', 'info');
+                
+                let successCount = 0;
+                let errorCount = 0;
+                
+                // バッチ処理でデータを更新
+                for (const record of data) {
+                    try {
+                        // 新しい形式と古い形式の両方に対応
+                        const pictureId = record.picture_id;
+                        const pictureUrl = record.picture_data ? record.picture_data.url : record.picture_url;
+                        const portraitUrl = record.portrait_data ? record.portrait_data.url : record.portrait_url;
+                        const status = record.status;
+                        const jsonData = record.json_data;
+                        const updatedAt = record.updated_at;
+                        const createdAt = record.created_at;
+                        
+                        // 既存レコードの確認
+                        const { data: existingRecord } = await window.supabase
+                            .from('portrait_db')
+                            .select('picture_id')
+                            .eq('picture_id', pictureId)
+                            .single();
+                        
+                        if (existingRecord) {
+                            // 既存レコードを更新
+                            const { error: updateError } = await window.supabase
+                                .from('portrait_db')
+                                .update({
+                                    status: status,
+                                    picture_url: pictureUrl,
+                                    portrait_url: portraitUrl,
+                                    json_data: jsonData,
+                                    updated_at: updatedAt || new Date().toISOString()
+                                })
+                                .eq('picture_id', pictureId);
+                                
+                            if (updateError) throw updateError;
+                        } else {
+                            // 新しいレコードを挿入
+                            const { error: insertError } = await window.supabase
+                                .from('portrait_db')
+                                .insert({
+                                    picture_id: pictureId,
+                                    status: status,
+                                    picture_url: pictureUrl,
+                                    portrait_url: portraitUrl,
+                                    json_data: jsonData,
+                                    created_at: createdAt || new Date().toISOString(),
+                                    updated_at: updatedAt || new Date().toISOString()
+                                });
+                                
+                            if (insertError) throw insertError;
+                        }
+                        
+                        successCount++;
+                        
+                    } catch (recordError) {
+                        console.error(`レコード ${record.picture_id || 'ID不明'} のインポートエラー:`, recordError);
+                        errorCount++;
+                    }
+                }
+                
+                
+                // データを再読み込み
+                await loadPhotos();
+                
+                // 結果通知
+                if (errorCount === 0) {
+                    showNotification(`データベースインポートが完了しました (${successCount}件)`, 'success');
+                } else {
+                    showNotification(`インポート完了: 成功 ${successCount}件, エラー ${errorCount}件`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('データベースインポートエラー:', error);
+                showNotification('データベースインポートに失敗しました: ' + error.message, 'error');
+            }
+        }
+        
+        // グローバルスコープに関数を公開
+        window.cancelPortrait = cancelPortrait;
+        window.downloadJsonData = downloadJsonData;
+        window.removeBanner = removeBanner;
+        window.manualCleanup = manualCleanup;
+        window.exportDatabaseAsJSON = exportDatabaseAsJSON;
+        window.exportDatabaseAsCSV = exportDatabaseAsCSV;
+        window.openImportDialog = openImportDialog;
+    </script>
+</body>
+</html>
