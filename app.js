@@ -43,9 +43,9 @@ class PortraitApp {
     async loadManifest() {
         try {
             console.log('現在のURL:', window.location.href);
-            console.log('完全なパス:', `${window.location.origin}/assets/assets/manifest.json`);
+            console.log('完全なパス:', `${window.location.origin}/assets/manifest.json`);
             
-            const response = await fetch('assets/assets/manifest.json');
+            const response = await fetch('assets/manifest.json');
             console.log('レスポンス:', {
                 ok: response.ok,
                 status: response.status,
@@ -70,13 +70,13 @@ class PortraitApp {
                 stack: error.stack,
                 name: error.name
             });
-            console.error('マニフェストファイルのパス: assets/assets/manifest.json');
+            console.error('マニフェストファイルのパス: assets/manifest.json');
             console.error('現在のURL:', window.location.href);
             
             // ファイル構造の確認
             console.error('ファイル構造の確認が必要です。以下を確認してください:');
             console.error('1. ローカルサーバーで実行しているか');
-            console.error('2. assets/assets/manifest.jsonファイルが存在するか');
+            console.error('2. assets/manifest.jsonファイルが存在するか');
             console.error('3. ファイルパスが正しいか');
         }
     }
@@ -247,7 +247,7 @@ class PortraitApp {
             data.parts.forEach(partNum => {
                 if (partNum !== 0) {
                     const folderName = category === 'mouth' ? 'mouse' : category;
-                    const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+                    const svgPath = `assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
                     allPaths.push(svgPath);
                 }
             });
@@ -755,7 +755,7 @@ class PortraitApp {
             
             // mouth/mouseの名前不一致を修正
             const folderName = originalCategory === 'mouth' ? 'mouse' : originalCategory;
-            const svgPath = `assets/assets/${folderName}/${folderName}_${part.id.toString().padStart(3, '0')}.svg`;
+            const svgPath = `assets/${folderName}/${folderName}_${part.id.toString().padStart(3, '0')}.svg`;
             
             // キャッシュから読み込み
             const svgText = await this.getCachedSVG(svgPath);
@@ -1181,7 +1181,7 @@ class PortraitApp {
             if (partNum === 0) return null; // 0番は「なし」なのでスキップ
 
             const folderName = category === 'mouth' ? 'mouse' : category;
-            const svgPath = `assets/assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
+            const svgPath = `assets/${folderName}/${folderName}_${partNum.toString().padStart(3, '0')}.svg`;
             
             try {
                 const svgText = await this.getCachedSVG(svgPath);
