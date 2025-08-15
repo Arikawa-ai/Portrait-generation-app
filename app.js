@@ -27,6 +27,11 @@ class PortraitApp {
         // 左右対称のパーツを定義
         this.symmetricalParts = ['eye', 'ear', 'eyebrow'];
         
+        // 初期化時にクリーンアップ
+        setTimeout(() => {
+            this.cleanupInvalidParts();
+        }, 100);
+        
         // 座標軸の表示フラグ
         this.showCoordinates = true;
         
@@ -98,10 +103,11 @@ class PortraitApp {
     }
 
     setupEventListeners() {
-        // パーツ選択のイベントリスナー
-        const partSelects = document.querySelectorAll('.part-select');
+        // パーツ選択のイベントリスナー（編集用プルダウンは除外）
+        const partSelects = document.querySelectorAll('.part-select:not(#partSelector)');
         partSelects.forEach(select => {
             select.addEventListener('change', (e) => {
+                console.log('[this.parts] 従来セレクトボックス:', e.target.id, e.target.value);
                 this.onPartSelect(e.target.id, e.target.value);
             });
         });
@@ -139,10 +145,28 @@ class PortraitApp {
         const partSelector = document.getElementById('partSelector');
         if (partSelector) {
             partSelector.addEventListener('change', (e) => {
-                if (e.target.value) {
-                    this.selectPart(e.target.value);
+                const selectedValue = e.target.value;
+                
+                if (selectedValue) {
+                    // 1. 選択されたカテゴリで現在選択中のサムネイルを探す
+                    const selectedThumbnailData = this.getSelectedThumbnailForCategory(selectedValue);
+                    
+                    if (selectedThumbnailData) {
+                        console.log('[this.parts] 選択済みサムネイルから取得:', selectedThumbnailData);
+                        
+                        // 2. サムネイルから取得した正しいデータでthis.partsを更新
+                        this.onPartSelectDirect(selectedThumbnailData.category, selectedThumbnailData.partId);
+                        
+                        // 3. パーツを編集対象に設定
+                        this.selectPart(selectedValue);
+                    } else {
+                        // サムネイルが選択されていない場合は通常の処理
+                        this.selectPart(selectedValue);
+                    }
                 } else {
                     this.deselectPart();
+                    // すべてのサムネイルの選択を解除
+                    document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
                 }
             });
         }
@@ -279,9 +303,9 @@ class PortraitApp {
         const endTime = performance.now();
     }
 
-    onPartSelect(selectId, value) {
-        const category = selectId.replace('Select', '');
-        console.log(`onPartSelect呼び出し: selectId=${selectId}, value=${value}, category=${category}`);
+    // 直接的な引数渡しバージョン（新しい実装）
+    onPartSelectDirect(category, value) {
+        console.log('[this.parts] onPartSelectDirect呼び出し: category=' + category + ', value=' + value);
         
         if (value) {
             // 左右対称のパーツかチェック
@@ -308,9 +332,11 @@ class PortraitApp {
                         rotation: APP_CONFIG.DEFAULT_PART_ROTATION,
                         zIndex: this.manifest.categories[category]?.zIndex || 1
                     };
+                    console.log('[this.parts] 新規パーツ作成:', category, this.parts[category]);
                 } else {
                     // 既存パーツのIDのみ更新（位置やサイズは保持）
                     this.parts[category].id = value;
+                    console.log('[this.parts] パーツID更新:', category, this.parts[category]);
                 }
             }
             
@@ -330,12 +356,14 @@ class PortraitApp {
                 }
                 delete this.parts[category + '_left'];
                 delete this.parts[category + '_right'];
+                console.log('[this.parts] 対称パーツ削除:', category + '_left', category + '_right');
             } else {
                 // 通常のパーツの場合
                 if (this.selectedPart === category) {
                     this.deselectPart();
                 }
                 delete this.parts[category];
+                console.log('[this.parts] 通常パーツ削除:', category);
             }
         }
         
@@ -343,6 +371,14 @@ class PortraitApp {
         this.updatePartSelector();
         
         this.render();
+    }
+
+    // 従来のセレクトボックス用（後方互換性のため）
+    onPartSelect(selectId, value) {
+        const category = selectId.replace('Select', '');
+        console.log('[this.parts] onPartSelect(従来版)呼び出し: selectId=' + selectId + ', category=' + category + ', value=' + value);
+        // 新しい関数に転送
+        this.onPartSelectDirect(category, value);
     }
 
     updatePartSelector() {
@@ -394,6 +430,8 @@ class PortraitApp {
     }
 
     selectPart(partKey) {
+        console.log('[this.parts] selectPart開始:', partKey, '| 現在のパーツ:', Object.keys(this.parts));
+        
         // パーツキーから基本カテゴリを取得（_left, _rightを除去）
         const baseCategory = partKey.replace(/_(left|right)$/, '');
         
@@ -409,6 +447,7 @@ class PortraitApp {
             }
             
             if (this.parts[targetPartKey]) {
+                console.log('[this.parts] 左右対称パーツ選択:', targetPartKey, '| データ:', this.parts[targetPartKey]);
                 this.selectedPart = targetPartKey;
                 const part = this.parts[targetPartKey];
                 
@@ -417,13 +456,9 @@ class PortraitApp {
                 if (partSelector) {
                     partSelector.value = baseCategory;
                 }
+                console.log('[this.parts] selectedPart設定完了:', this.selectedPart);
                 
-                // UIを更新（selectedPart要素が存在する場合のみ）
-                const selectedPartElement = document.getElementById('selectedPart');
-                if (selectedPartElement) {
-                    const displayName = CATEGORY_NAMES[baseCategory] || baseCategory;
-                    selectedPartElement.textContent = displayName;
-                }
+                // selectedPart表示は削除済み
                 
                 // スライダーの値を更新（基準値からの相対値で表示）
                 const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
@@ -483,18 +518,16 @@ class PortraitApp {
                 return;
             }
             
+            console.log('[this.parts] 通常パーツ選択:', partKey, '| データ:', this.parts[partKey]);
+            
             // プルダウンの値を更新
             const partSelector = document.getElementById('partSelector');
             if (partSelector) {
                 partSelector.value = baseCategory;
             }
+            console.log('[this.parts] selectedPart設定完了:', this.selectedPart);
             
-            // UIを更新（selectedPart要素が存在する場合のみ）
-            const selectedPartElement = document.getElementById('selectedPart');
-            if (selectedPartElement) {
-                const displayName = CATEGORY_NAMES[baseCategory] || baseCategory;
-                selectedPartElement.textContent = displayName;
-            }
+            // selectedPart表示は削除済み
             
             // スライダーの値を更新（基準値からの相対値で表示）
             const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[baseCategory] || APP_CONFIG.DEFAULT_PART_SCALE;
@@ -531,14 +564,13 @@ class PortraitApp {
                 spacingSlider.parentElement.style.opacity = '0.5';
             }
         }
+        
+        // パーツ選択後に再描画
+        this.render();
     }
 
     deselectPart() {
         this.selectedPart = null;
-        const selectedPartElement = document.getElementById('selectedPart');
-        if (selectedPartElement) {
-            selectedPartElement.textContent = 'なし';
-        }
         
         // 間隔スライダーを無効化
         const spacingSlider = document.getElementById('spacingSlider');
@@ -746,6 +778,9 @@ class PortraitApp {
         //     this.ctx.restore();
         // }
         
+        // 描画前に無効なパーツを一括削除
+        this.cleanupInvalidParts();
+        
         // パーツをzIndex順にソートして描画
         const sortedParts = Object.entries(this.parts)
             .sort(([,a], [,b]) => a.zIndex - b.zIndex);
@@ -770,9 +805,9 @@ class PortraitApp {
             // 元のカテゴリ名を取得（_left, _rightを除去）
             const originalCategory = part.category;
             
-            // 無効なカテゴリをスキップ
+            // 無効なカテゴリをスキップ（削除は描画前に一括実行済み）
             if (!CATEGORY_NAMES.hasOwnProperty(originalCategory)) {
-                console.warn(`無効なカテゴリのパーツを描画をスキップしました: ${originalCategory} (${category})`);
+                console.warn(`無効なカテゴリのパーツをスキップ: ${originalCategory} (${category})`);
                 return;
             }
             
@@ -1297,8 +1332,8 @@ class PortraitApp {
             console.error(`セレクトボックスが見つかりません: ${category + 'Select'}`);
         }
         
-        // 直接パーツを追加する処理も呼び出す
-        this.onPartSelect(category + 'Select', partId);
+        // 直接パーツを追加する処理も呼び出す（新しい関数を使用）
+        this.onPartSelectDirect(category, partId);
     }
 
     updatePhotoDisplay() {
@@ -1739,10 +1774,7 @@ class PortraitApp {
             }
         });
         
-        const selectedPartElement = document.getElementById('selectedPart');
-        if (selectedPartElement) {
-            selectedPartElement.textContent = 'なし';
-        }
+        // selectedPart表示は削除済み
         
         // 参考画像をクリア
         const referenceDiv = document.getElementById('referenceImage');
@@ -1852,7 +1884,7 @@ PortraitApp.prototype.loadPhotoFromURL = async function() {
         
         // 既存のJSONデータがあれば読み込み
         if (photoData.json_data && Object.keys(photoData.json_data).length > 0) {
-            console.log('既存の似顔絵データを復元中...');
+            console.log('[this.parts] データ復元開始...');
             this.loadPartsFromData(photoData.json_data);
         }
         
@@ -1910,14 +1942,18 @@ PortraitApp.prototype.loadPartsFromData = function(jsonData) {
             if (partData && partData.category && CATEGORY_NAMES.hasOwnProperty(partData.category)) {
                 validParts[partKey] = partData;
             } else {
-                console.warn(`無効なパーツデータを除外しました: ${partKey}`, partData);
+                console.warn('[this.parts] 無効データ除外:', partKey, partData);
             }
         });
         
         this.parts = validParts;
+        console.log('[this.parts] JSONからデータ読み込み完了:', Object.keys(this.parts));
         
         // 無効なパーツを完全に除去するクリーンアップ処理
         this.cleanupInvalidParts();
+        
+        // プルダウンも更新
+        this.updatePartSelector();
         
         // UIの状態を更新
         this.updateUIFromPartsData();
@@ -1926,20 +1962,63 @@ PortraitApp.prototype.loadPartsFromData = function(jsonData) {
         this.render();
         
     } catch (error) {
-        console.error('パーツデータの復元に失敗:', error);
+        console.error('[this.parts] データ復元エラー:', error);
     }
 };
 
 PortraitApp.prototype.cleanupInvalidParts = function() {
+    const initialCount = Object.keys(this.parts).length;
     const validParts = {};
+    let removedCount = 0;
+    let fixedCount = 0;
+    
     Object.entries(this.parts).forEach(([partKey, partData]) => {
-        if (partData && partData.category && CATEGORY_NAMES.hasOwnProperty(partData.category)) {
-            validParts[partKey] = partData;
+        if (!partData) {
+            console.warn('[this.parts] 空データ削除:', partKey);
+            removedCount++;
+            return;
+        }
+        
+        // category と id が入れ替わっている可能性をチェック
+        let fixedPartData = { ...partData };
+        let needsFix = false;
+        
+        // categoryが無効でidが有効なカテゴリ名の場合、入れ替わりの可能性
+        if (!CATEGORY_NAMES.hasOwnProperty(partData.category) && 
+            CATEGORY_NAMES.hasOwnProperty(partData.id)) {
+            console.warn('[this.parts] category/id入れ替え修正:', partKey, partData);
+            fixedPartData.category = partData.id;
+            fixedPartData.id = partData.category;
+            needsFix = true;
+            fixedCount++;
+        }
+        
+        // 修正後または元々正常なデータをチェック
+        if (CATEGORY_NAMES.hasOwnProperty(fixedPartData.category)) {
+            // IDが数値でない場合は削除
+            if (isNaN(parseInt(fixedPartData.id))) {
+                console.warn('[this.parts] 無効ID削除:', partKey, fixedPartData);
+                removedCount++;
+                return;
+            }
+            
+            validParts[partKey] = fixedPartData;
+            if (needsFix) {
+                console.log('[this.parts] 修正完了:', partKey, '->', fixedPartData.category, fixedPartData.id);
+            }
         } else {
-            console.warn(`無効なパーツを削除しました: ${partKey}`, partData);
+            console.warn('[this.parts] 無効カテゴリ削除:', partKey, partData);
+            removedCount++;
         }
     });
+    
     this.parts = validParts;
+    
+    // パーツが修正または削除された場合のみプルダウンを更新
+    if (removedCount > 0 || fixedCount > 0) {
+        console.log(`[this.parts] クリーンアップ完了: ${fixedCount}修正 ${removedCount}削除`);
+        this.updatePartSelectorFromData();
+    }
 };
 
 PortraitApp.prototype.updateUIFromPartsData = function() {
@@ -1972,10 +2051,10 @@ PortraitApp.prototype.updatePartSelectorFromData = function() {
         if (partData && partData.id !== undefined) {
             const category = partData.category;
             
-            // 未知のカテゴリは除外（CATEGORY_NAMESに定義されていないもの）
+            // 未知のカテゴリの場合は警告のみ表示（削除はしない）
             if (!CATEGORY_NAMES.hasOwnProperty(category)) {
-                console.warn(`未知のカテゴリを除外しました: ${category} (パーツキー: ${partKey})`);
-                return;
+                console.warn('[this.parts] 未知カテゴリ（保持）:', category, partKey);
+                // returnしないで処理を続行
             }
             
             // 左右対称パーツの場合、カテゴリが既に追加されていればスキップ
@@ -1994,14 +2073,14 @@ PortraitApp.prototype.updatePartSelectorFromData = function() {
             }
             
             // 表示名を作成（カテゴリ名のみ）
-            const japaneseCategory = CATEGORY_NAMES[category];
+            const japaneseCategory = CATEGORY_NAMES[category] || category; // 未知のカテゴリは英語名のまま表示
             option.textContent = japaneseCategory;
             partSelector.appendChild(option);
         }
     });
     
-    console.log('パーツ編集プルダウンを更新しました:', Object.keys(this.parts));
-    console.log('パーツデータの詳細:', this.parts);
+    console.log('[this.parts] プルダウン更新完了:', Object.keys(this.parts));
+    console.log('[this.parts] 現在のデータ:', this.parts);
 };
 
 PortraitApp.prototype.waitForSupabase = function() {
@@ -2094,4 +2173,88 @@ PortraitApp.prototype.notifyOtherTabs = function(eventType, data) {
     } catch (error) {
         console.error('タブ間通知の送信に失敗:', error);
     }
+};
+
+// プルダウン選択時に対応するサムネイルをハイライトし、サムネイルからデータを取得
+PortraitApp.prototype.highlightCorrespondingThumbnail = function(partKey) {
+    if (!this.parts[partKey]) return null;
+    
+    const partData = this.parts[partKey];
+    const category = partData.category;
+    const partId = partData.id;
+    
+    // 全てのサムネイルの選択を解除
+    document.querySelectorAll('.part-thumbnail').forEach(t => t.classList.remove('selected'));
+    
+    // 対応するサムネイルを選択状態に
+    const targetThumbnail = document.querySelector(
+        `.part-thumbnail[data-category="${category}"][data-part-id="${partId}"]`
+    );
+    
+    if (targetThumbnail) {
+        targetThumbnail.classList.add('selected');
+        
+        // サムネイルから正しいデータを取得して返す
+        const thumbnailCategory = targetThumbnail.dataset.category;
+        const thumbnailPartId = targetThumbnail.dataset.partId;
+        
+        console.log('[this.parts] サムネイルから取得:', thumbnailCategory, thumbnailPartId);
+        return {
+            category: thumbnailCategory,
+            partId: thumbnailPartId
+        };
+    }
+    
+    return null;
+};
+
+// プルダウン選択時に対応するカテゴリタブをアクティブにして、パーツ一覧を表示
+PortraitApp.prototype.showCategoryForPart = function(partKey) {
+    if (!this.parts[partKey]) return;
+    
+    const partData = this.parts[partKey];
+    const category = partData.category;
+    
+    // 対応するカテゴリタブをアクティブに
+    document.querySelectorAll('.category-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.category === category) {
+            tab.classList.add('active');
+        }
+    });
+    
+    // そのカテゴリのパーツ一覧を表示
+    this.showPartsForCategory(category);
+    
+};
+
+// 指定されたカテゴリで現在選択中のサムネイルからデータを取得
+PortraitApp.prototype.getSelectedThumbnailForCategory = function(category) {
+    // カテゴリに基づいてパーツキーを決定（左右対称パーツの場合）
+    let searchCategory = category;
+    
+    // 左右対称パーツの場合、基本カテゴリ名に変換
+    if (category.endsWith('_left') || category.endsWith('_right')) {
+        searchCategory = category.replace(/_left|_right$/, '');
+    }
+    
+    // そのカテゴリの選択済みサムネイルを探す
+    const selectedThumbnail = document.querySelector(
+        `.part-thumbnail[data-category="${searchCategory}"].selected`
+    );
+    
+    if (selectedThumbnail) {
+        const thumbnailCategory = selectedThumbnail.dataset.category;
+        const thumbnailPartId = selectedThumbnail.dataset.partId;
+        
+        console.log('[this.parts] 選択済みサムネイル発見:', thumbnailCategory, thumbnailPartId);
+        
+        return {
+            category: thumbnailCategory,
+            partId: thumbnailPartId
+        };
+    }
+    
+    console.log('[this.parts] 選択済みサムネイルなし:', searchCategory);
+    return null;
 }; 
