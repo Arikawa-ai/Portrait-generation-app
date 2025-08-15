@@ -103,22 +103,18 @@ const APP_CONFIG = {
 const ERROR_MESSAGES = {
     MANIFEST_LOAD_FAILED: 'マニフェストファイルの読み込みに失敗しました',
     PART_LOAD_FAILED: 'パーツの読み込みに失敗しました',
-    GOOGLE_DRIVE_AUTH_FAILED: 'Googleドライブの認証に失敗しました',
-    GOOGLE_DRIVE_LOAD_FAILED: 'Googleドライブからの画像読み込みに失敗しました',
     SAVE_FAILED: '保存に失敗しました',
     SVG_NOT_FOUND: 'SVGファイルが見つかりません'
 };
 
 // 成功メッセージ
 const SUCCESS_MESSAGES = {
-    GOOGLE_DRIVE_LOADED: 'Googleドライブから画像を読み込みました',
     SAVE_SUCCESS: '似顔絵とパーツデータを保存しました！'
 };
 
 // 設定をエクスポート
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        GOOGLE_DRIVE_CONFIG,
         APP_CONFIG,
         ERROR_MESSAGES,
         SUCCESS_MESSAGES

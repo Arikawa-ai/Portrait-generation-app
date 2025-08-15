@@ -19,6 +19,9 @@ class PortraitApp {
         this.imageCache = new Map();
         this.thumbnailCache = new Map();
         
+        // 現在の写真データ
+        this.currentPhotoData = null;
+        
         this.init();
     }
 
@@ -28,6 +31,10 @@ class PortraitApp {
         this.loadParts();
         this.setupImageUpload();
         this.setupPartsGrid();
+        
+        // URLパラメータから写真IDを取得して自動読み込み
+        await this.loadPhotoFromURL();
+        
         this.render();
         // バックグラウンドで事前読み込み
         this.preloadAllResources();
@@ -35,7 +42,6 @@ class PortraitApp {
 
     async loadManifest() {
         try {
-            console.log('マニフェストファイルを読み込み中...');
             console.log('現在のURL:', window.location.href);
             console.log('完全なパス:', `${window.location.origin}/assets/assets/manifest.json`);
             
@@ -52,11 +58,9 @@ class PortraitApp {
             }
             
             this.manifest = await response.json();
-            console.log('マニフェストファイル読み込み成功:', this.manifest);
             
             // 各カテゴリのパーツ数を確認
             Object.entries(this.manifest.categories).forEach(([category, data]) => {
-                console.log(`${category}: ${data.parts.length}個のパーツ`);
             });
             
         } catch (error) {
@@ -236,7 +240,6 @@ class PortraitApp {
     async preloadAllResources() {
         if (!this.manifest) return;
         
-        console.log('バックグラウンドでリソースを事前読み込み中...');
         const startTime = performance.now();
         
         const allPaths = [];
@@ -258,7 +261,6 @@ class PortraitApp {
         }
         
         const endTime = performance.now();
-        console.log(`事前読み込み完了: ${allPaths.length}個のファイル (${Math.round(endTime - startTime)}ms)`);
     }
 
     onPartSelect(selectId, value) {
@@ -290,7 +292,6 @@ class PortraitApp {
                         rotation: APP_CONFIG.DEFAULT_PART_ROTATION,
                         zIndex: this.manifest.categories[category]?.zIndex || 1
                     };
-                    console.log(`新規パーツ作成: ${category}`, this.parts[category]);
                 } else {
                     // 既存パーツのIDのみ更新（位置やサイズは保持）
                     this.parts[category].id = value;
@@ -322,7 +323,6 @@ class PortraitApp {
         // パーツ選択プルダウンを更新
         this.updatePartSelector();
         
-        console.log(`パーツ状況:`, this.parts);
         this.render();
     }
 
@@ -502,7 +502,6 @@ class PortraitApp {
             // 回転スライダーの有効/無効制御
             const rotationSlider = document.getElementById('rotationSlider');
             const canRotate = ['eye', 'eyebrow', 'ear'].includes(baseCategory);
-            console.log(`通常パーツ回転判定: baseCategory=${baseCategory}, canRotate=${canRotate}`);
             if (rotationSlider) {
                 rotationSlider.disabled = !canRotate;
                 rotationSlider.parentElement.style.opacity = canRotate ? '1' : '0.5';
@@ -513,7 +512,6 @@ class PortraitApp {
             if (spacingSlider) {
                 spacingSlider.disabled = true;
                 spacingSlider.parentElement.style.opacity = '0.5';
-                console.log(`通常パーツ間隔スライダー: 無効化`);
             }
         }
     }
@@ -587,7 +585,6 @@ class PortraitApp {
         // 再描画
         this.render();
         
-        console.log(`パーツリセット完了: ${originalCategory}`);
     }
 
     updateSlidersFromPart() {
@@ -702,12 +699,10 @@ class PortraitApp {
             }
         }
         
-        console.log(`パーツ状況:`, this.parts);
         this.render();
     }
 
     async render() {
-        console.log(`レンダリング開始。現在のパーツ数: ${Object.keys(this.parts).length}`);
         // キャンバスをクリア
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -1099,7 +1094,6 @@ class PortraitApp {
     }
 
     createSymmetricalParts(category, partId) {
-        console.log(`左右対称パーツ作成: ${category}, ID: ${partId}`);
         
         // カテゴリごとのデフォルトスケールを取得
         const defaultScale = APP_CONFIG.CATEGORY_SCALES?.[category] || APP_CONFIG.DEFAULT_PART_SCALE;
@@ -1140,8 +1134,6 @@ class PortraitApp {
             isRight: true
         };
         
-        console.log(`左パーツ作成: ${category}_left`, this.parts[category + '_left']);
-        console.log(`右パーツ作成: ${category}_right`, this.parts[category + '_right']);
     }
     
     getSymmetryOffset(category) {
@@ -1268,7 +1260,6 @@ class PortraitApp {
     }
 
     selectPartFromGrid(category, partId) {
-        console.log(`パーツ選択: ${category}, ID: ${partId}`);
         
         // 従来のセレクトボックスを更新
         const select = document.getElementById(category + 'Select');
@@ -1349,13 +1340,8 @@ class PortraitApp {
 
     async savePortrait() {
         try {
-            // キャンバスをPNG画像として保存
-            const imageData = this.canvas.toDataURL('image/png');
-            const link = document.createElement('a');
+            // タイムスタンプを生成
             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-            link.download = `${APP_CONFIG.FILE_NAMES.PORTRAIT_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.IMAGE}`;
-            link.href = imageData;
-            link.click();
             
             // パーツの座標データをJSONとして保存（絶対座標に変換）
             const absoluteParts = {};
@@ -1425,6 +1411,181 @@ class PortraitApp {
                     height: this.canvas.height
                 }
             };
+
+            let portraitUrl = null;
+            
+            // 保存処理の前に状態を確認
+            console.log('=== 保存処理開始 ===');
+            console.log('currentPhotoData存在:', !!this.currentPhotoData);
+            console.log('window.supabase存在:', !!window.supabase);
+            
+            if (this.currentPhotoData) {
+                console.log('currentPhotoDataの詳細:', this.currentPhotoData);
+            }
+            
+            if (!this.currentPhotoData) {
+                console.warn('currentPhotoDataが存在しません。URLパラメータで写真を読み込みましたか？');
+            }
+            
+            if (!window.supabase) {
+                console.warn('Supabaseクライアントが利用できません');
+            }
+
+            // 現在の写真データが存在する場合、Supabaseに保存してDBを更新
+            if (this.currentPhotoData && window.supabase) {
+                try {
+                    console.log('似顔絵をSupabaseストレージに保存中...');
+                    console.log('現在の写真データ:', this.currentPhotoData);
+                    
+                    // Canvas から直接Blobを取得（CSP問題を回避）
+                    const blob = await new Promise(resolve => {
+                        this.canvas.toBlob(resolve, 'image/png');
+                    });
+                    
+                    // ファイル名を生成（picture_idを使用）
+                    const portraitFileName = `portrait_${this.currentPhotoData.picture_id}_${timestamp}.png`;
+                    console.log('アップロード予定ファイル名:', portraitFileName);
+                    console.log('Blobサイズ:', blob.size, 'bytes');
+                    
+                    // Supabaseストレージに画像をアップロード
+                    const { data: uploadData, error: uploadError } = await window.supabase.storage
+                        .from('pictures')
+                        .upload(portraitFileName, blob, {
+                            contentType: 'image/png',
+                            upsert: true
+                        });
+                    
+                    console.log('アップロード結果:', { uploadData, uploadError });
+                    
+                    if (uploadError) {
+                        throw new Error(`ストレージアップロードエラー: ${uploadError.message}`);
+                    }
+                    
+                    // アップロードされた画像のパブリックURLを取得
+                    const { data: urlData } = window.supabase.storage
+                        .from('pictures')
+                        .getPublicUrl(portraitFileName);
+                    
+                    portraitUrl = urlData.publicUrl;
+                    console.log('似顔絵保存完了:', portraitUrl);
+                    console.log('URLデータ:', urlData);
+                    
+                    // データベースを更新
+                    console.log('データベース更新開始:', {
+                        picture_id: this.currentPhotoData.picture_id,
+                        portrait_url: portraitUrl,
+                        json_data_size: JSON.stringify(partsData).length,
+                        json_data_preview: partsData
+                    });
+                    
+                    console.log('更新するデータ:', {
+                        status: '作成済',
+                        portrait_url: portraitUrl,
+                        json_data: partsData,
+                        updated_at: new Date().toISOString()
+                    });
+                    
+                    // 更新前にレコードの存在確認
+                    console.log('レコード存在確認中...', this.currentPhotoData.picture_id);
+                    const { data: existingRecord, error: existError } = await window.supabase
+                        .from('portrait_db')
+                        .select('picture_id, status, portrait_url, json_data')
+                        .eq('picture_id', this.currentPhotoData.picture_id)
+                        .single();
+                    
+                    if (existError) {
+                        console.error('レコード存在確認エラー:', existError);
+                        if (existError.code === 'PGRST116') {
+                            throw new Error(`写真ID ${this.currentPhotoData.picture_id} のレコードが見つかりません。photo-list.htmlから正しくアクセスしていますか？`);
+                        }
+                        throw new Error(`レコード確認エラー: ${existError.message}`);
+                    }
+                    
+                    console.log('更新対象レコード確認:', existingRecord);
+                    
+                    // Step 1: 更新処理のみ実行（RLS問題回避のため.select()なし）
+                    const { error: updateError } = await window.supabase
+                        .from('portrait_db')
+                        .update({
+                            status: '作成済',
+                            portrait_url: portraitUrl,
+                            json_data: partsData,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('picture_id', this.currentPhotoData.picture_id);
+                    
+                    if (updateError) {
+                        console.error('データベース更新エラー:', updateError);
+                        throw new Error(`データベース更新エラー: ${updateError.message}`);
+                    }
+                    
+                    console.log('✅ データベース更新完了（RLS対応）');
+                    
+                    // Step 2: 更新結果を別途確認
+                    const { data: updatedRecord, error: selectError } = await window.supabase
+                        .from('portrait_db')
+                        .select('picture_id, status, portrait_url, json_data')
+                        .eq('picture_id', this.currentPhotoData.picture_id)
+                        .single();
+                    
+                    if (selectError) {
+                        console.warn('更新後の確認でエラー:', selectError);
+                        // 更新は成功しているので、確認エラーは警告のみ
+                    } else {
+                        console.log('✅ 更新結果確認:', {
+                            picture_id: updatedRecord.picture_id,
+                            status: updatedRecord.status,
+                            portrait_url_exists: !!updatedRecord.portrait_url,
+                            json_data_exists: !!updatedRecord.json_data,
+                            json_data_keys: updatedRecord.json_data ? Object.keys(updatedRecord.json_data) : null
+                        });
+                    }
+                    
+                    // 他のタブに更新を通知（更新されたデータを使用）
+                    const notificationData = {
+                        picture_id: this.currentPhotoData.picture_id,
+                        status: '作成済',
+                        portrait_url: portraitUrl,
+                        json_data: partsData,
+                        updated_at: new Date().toISOString()
+                    };
+                    
+                    console.log('タブ間通知データ:', notificationData);
+                    this.notifyOtherTabs('portrait_updated', notificationData);
+                    
+                    this.showNotification('似顔絵を保存し、データベースを更新しました！', 'success');
+                    
+                    // currentPhotoDataを更新（次回保存時のため）
+                    this.currentPhotoData.status = '作成済';
+                    this.currentPhotoData.portrait_url = portraitUrl;
+                    this.currentPhotoData.json_data = partsData;
+                    this.currentPhotoData.updated_at = new Date().toISOString();
+                    
+                    // 1.5秒後にphoto-list.htmlに遷移（ハイライト表示付き）
+                    setTimeout(() => {
+                        window.location.href = `photo-list.html?updated=${this.currentPhotoData.picture_id}`;
+                    }, 1500);
+                    
+                } catch (dbError) {
+                    console.error('データベース保存エラー:', dbError);
+                    this.showNotification(`データベース保存エラー: ${dbError.message}`, 'error');
+                }
+            }
+            
+            // ローカルファイルとしてもダウンロード
+            const localBlob = await new Promise(resolve => {
+                this.canvas.toBlob(resolve, 'image/png');
+            });
+            const localBlobUrl = URL.createObjectURL(localBlob);
+            const link = document.createElement('a');
+            link.download = `${APP_CONFIG.FILE_NAMES.PORTRAIT_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.IMAGE}`;
+            link.href = localBlobUrl;
+            link.click();
+            
+            // メモリリークを防ぐためURLを解放
+            setTimeout(() => {
+                URL.revokeObjectURL(localBlobUrl);
+            }, 100);
             
             const jsonBlob = new Blob([JSON.stringify(partsData, null, 2)], {
                 type: 'application/json'
@@ -1435,8 +1596,27 @@ class PortraitApp {
             jsonLink.href = jsonUrl;
             jsonLink.click();
             
-            // 成功メッセージを表示
-            alert(SUCCESS_MESSAGES.SAVE_SUCCESS);
+            // 結果に応じて適切なメッセージと処理を実行
+            if (portraitUrl) {
+                console.log('=== 保存成功 ===');
+                alert('似顔絵を保存しました！データベースも更新されました。');
+            } else if (this.currentPhotoData && !window.supabase) {
+                console.log('=== Supabaseなしで保存 ===');
+                alert('似顔絵をローカルに保存しました。データベース機能が利用できません。');
+            } else if (!this.currentPhotoData) {
+                console.log('=== currentPhotoDataなしで保存 ===');
+                alert('似顔絵をローカルに保存しました。\n\n注意：データベースに保存するには、photo-list.htmlから「似顔絵作成」ボタンでアクセスしてください。');
+            } else {
+                console.log('=== 通常保存 ===');
+                alert(SUCCESS_MESSAGES.SAVE_SUCCESS);
+            }
+            
+            // photo-list.htmlへの遷移処理
+            if (!portraitUrl) {
+                if (confirm('写真一覧ページに移動しますか？')) {
+                    window.location.href = 'photo-list.html';
+                }
+            }
             
         } catch (error) {
             console.error(ERROR_MESSAGES.SAVE_FAILED, error);
@@ -1503,9 +1683,7 @@ class PortraitApp {
 // アプリケーションの初期化
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        console.log('アプリケーション初期化開始...');
         new PortraitApp();
-        console.log('アプリケーション初期化完了');
     } catch (error) {
         console.error('アプリケーション初期化エラー:', error);
         console.error('エラー詳細:', {
@@ -1537,4 +1715,222 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         document.body.appendChild(errorDiv);
     }
-}); 
+});
+
+// PortraitApp クラスに追加する関数
+PortraitApp.prototype.loadPhotoFromURL = async function() {
+    try {
+        // URLパラメータから写真IDを取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const photoId = urlParams.get('photo_id');
+        
+        if (!photoId) {
+            console.log('URLパラメータに photo_id が指定されていません');
+            return;
+        }
+        
+        
+        // Supabaseクライアントの初期化完了を待つ
+        await this.waitForSupabase();
+        
+        if (!window.supabase || typeof window.supabase.from !== 'function') {
+            console.error('Supabaseクライアントの初期化に失敗しました');
+            this.showNotification('データベース接続に失敗しました', 'error');
+            return;
+        }
+        
+        console.log('Supabaseクライアント確認完了');
+        
+        const { data: photoData, error } = await window.supabase
+            .from('portrait_db')
+            .select('*')
+            .eq('picture_id', parseInt(photoId))
+            .single();
+        
+        if (error) {
+            console.error('写真データの取得に失敗:', error);
+            this.showNotification(`写真ID ${photoId} の読み込みに失敗しました: ${error.message}`, 'error');
+            return;
+        }
+        
+        if (!photoData) {
+            console.error(`写真ID ${photoId} が見つかりません`);
+            this.showNotification(`写真ID ${photoId} が見つかりません`, 'error');
+            return;
+        }
+        
+        this.currentPhotoData = photoData;
+        
+        // 画像を読み込んで表示
+        await this.loadImageFromUrl(photoData.picture_url);
+        
+        // 既存のJSONデータがあれば読み込み
+        if (photoData.json_data && Object.keys(photoData.json_data).length > 0) {
+            console.log('既存の似顔絵データを復元中...');
+            this.loadPartsFromData(photoData.json_data);
+        }
+        
+        // 成功通知
+        this.showNotification(`写真ID ${photoId} を読み込みました`, 'success');
+        
+    } catch (error) {
+        console.error('写真読み込み処理でエラー:', error);
+        this.showNotification('写真の読み込みでエラーが発生しました', 'error');
+    }
+};
+
+PortraitApp.prototype.loadImageFromUrl = async function(imageUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+            this.referenceImage = img;
+            
+            // 参考画像表示エリアに画像を表示
+            const referenceImageDiv = document.getElementById('referenceImage');
+            if (referenceImageDiv) {
+                referenceImageDiv.innerHTML = '';
+                const displayImg = document.createElement('img');
+                displayImg.src = imageUrl;
+                displayImg.style.maxWidth = '100%';
+                displayImg.style.maxHeight = '100%';
+                displayImg.style.objectFit = 'contain';
+                referenceImageDiv.appendChild(displayImg);
+            }
+            
+            this.render();
+            resolve();
+        };
+        
+        img.onerror = () => {
+            console.error('画像の読み込みに失敗:', imageUrl);
+            reject(new Error('画像の読み込みに失敗しました'));
+        };
+        
+        img.src = imageUrl;
+    });
+};
+
+PortraitApp.prototype.loadPartsFromData = function(jsonData) {
+    try {
+        if (!jsonData.parts) {
+            return;
+        }
+        
+        // パーツデータを復元
+        this.parts = { ...jsonData.parts };
+        
+        
+        // UIの状態を更新
+        this.updateUIFromPartsData();
+        
+        // 再描画
+        this.render();
+        
+    } catch (error) {
+        console.error('パーツデータの復元に失敗:', error);
+    }
+};
+
+PortraitApp.prototype.updateUIFromPartsData = function() {
+    // セレクトボックスの状態を更新
+    Object.entries(this.parts).forEach(([category, partData]) => {
+        const selectElement = document.getElementById(`${category}Select`);
+        if (selectElement && partData.file) {
+            selectElement.value = partData.file;
+        }
+    });
+};
+
+PortraitApp.prototype.waitForSupabase = function() {
+    return new Promise((resolve) => {
+        // 既に初期化済みの場合はすぐに解決
+        if (window.supabase && typeof window.supabase.from === 'function') {
+            console.log('Supabaseクライアント既に利用可能');
+            resolve();
+            return;
+        }
+        
+        // イベントリスナーで初期化完了を待つ
+        const handleSupabaseReady = () => {
+            window.removeEventListener('supabaseReady', handleSupabaseReady);
+            resolve();
+        };
+        
+        window.addEventListener('supabaseReady', handleSupabaseReady);
+        
+        // タイムアウト処理（10秒）
+        setTimeout(() => {
+            window.removeEventListener('supabaseReady', handleSupabaseReady);
+            console.error('Supabase初期化タイムアウト');
+            resolve(); // エラーでも続行
+        }, 10000);
+    });
+};
+
+PortraitApp.prototype.showNotification = function(message, type = 'info') {
+    // 通知を表示する簡単な実装
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 5px;
+        color: white;
+        font-weight: bold;
+        z-index: 1000;
+        max-width: 300px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    // タイプに応じて色を変更
+    switch (type) {
+        case 'success':
+            notification.style.background = '#28a745';
+            break;
+        case 'error':
+            notification.style.background = '#dc3545';
+            break;
+        default:
+            notification.style.background = '#007bff';
+    }
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // 3秒後に自動的に削除
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+};
+
+PortraitApp.prototype.notifyOtherTabs = function(eventType, data) {
+    try {
+        // BroadcastChannelを使用してタブ間通信
+        if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('portrait_app_updates');
+            channel.postMessage({
+                type: eventType,
+                data: data,
+                timestamp: new Date().toISOString()
+            });
+            console.log('BroadcastChannelでタブ間通知送信:', eventType, data);
+        }
+        
+        // LocalStorageを使用したフォールバック
+        const updateEvent = {
+            type: eventType,
+            data: data,
+            timestamp: new Date().toISOString()
+        };
+        localStorage.setItem('portrait_app_last_update', JSON.stringify(updateEvent));
+        console.log('LocalStorageでタブ間通知送信:', eventType, data);
+        
+    } catch (error) {
+        console.error('タブ間通知の送信に失敗:', error);
+    }
+}; 
