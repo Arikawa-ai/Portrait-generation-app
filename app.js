@@ -1,3 +1,19 @@
+// カテゴリ名の日本語マッピング（全体で共有）
+const CATEGORY_NAMES = {
+    outline: '輪郭',
+    hair: '髪',
+    eyebrow: '眉毛',
+    eye: '目',
+    ear: '耳',
+    nose: '鼻',
+    mouse: '口',
+    beard: 'ひげ',
+    glasses: 'メガネ',
+    acc: 'アクセサリー',
+    wrinkles: 'しわ',
+    extras: 'その他'
+};
+
 class PortraitApp {
     constructor() {
         this.canvas = document.getElementById('canvas');
@@ -298,6 +314,9 @@ class PortraitApp {
                 }
             }
             
+            // パーツ編集プルダウンを更新
+            this.updatePartSelectorFromData();
+            
             // 自動的にこのパーツを選択
             this.selectPart(category);
         } else {
@@ -363,22 +382,7 @@ class PortraitApp {
             option.value = category; // 実際のキーを保持
             
             // カテゴリ名を日本語に変換
-            const categoryNames = {
-                outline: '輪郭',
-                hair: '髪',
-                eyebrow: '眉毛',
-                eye: '目',
-                ear: '耳',
-                nose: '鼻',
-                mouse: '口',
-                beard: 'ひげ',
-                glasses: 'メガネ',
-                acc: 'アクセサリー',
-                wrinkles: 'しわ',
-                extras: 'その他'
-            };
-            
-            option.textContent = categoryNames[displayCategory] || displayCategory;
+            option.textContent = CATEGORY_NAMES[displayCategory] || displayCategory;
             partSelector.appendChild(option);
             
             // 追加したカテゴリを記録
@@ -389,30 +393,36 @@ class PortraitApp {
         partSelector.value = currentSelection;
     }
 
-    selectPart(category) {
-        // カテゴリ名から基本カテゴリを取得（_left, _rightを除去）
-        const baseCategory = category.replace(/_(left|right)$/, '');
+    selectPart(partKey) {
+        // パーツキーから基本カテゴリを取得（_left, _rightを除去）
+        const baseCategory = partKey.replace(/_(left|right)$/, '');
         
         // 左右対称パーツかどうかチェック
         const isSymmetrical = this.symmetricalParts.includes(baseCategory);
         
         if (isSymmetrical) {
-            // 左右対称パーツの場合は左側を選択
-            const leftPartKey = baseCategory + '_left';
-            if (this.parts[leftPartKey]) {
-                this.selectedPart = leftPartKey;
-                const part = this.parts[leftPartKey];
+            // 左右対称パーツの場合、指定されたキーのパーツを選択
+            // partKeyが具体的なキー（eye_left等）でない場合は左側を選択
+            let targetPartKey = partKey;
+            if (partKey === baseCategory) {
+                targetPartKey = baseCategory + '_left';
+            }
+            
+            if (this.parts[targetPartKey]) {
+                this.selectedPart = targetPartKey;
+                const part = this.parts[targetPartKey];
+                
+                // プルダウンの値を更新（左右対称パーツはカテゴリ名で統一）
+                const partSelector = document.getElementById('partSelector');
+                if (partSelector) {
+                    partSelector.value = baseCategory;
+                }
                 
                 // UIを更新（selectedPart要素が存在する場合のみ）
                 const selectedPartElement = document.getElementById('selectedPart');
                 if (selectedPartElement) {
-                    const categoryNames = {
-                        eye: '目',
-                        eyebrow: '眉毛', 
-                        ear: '耳'
-                    };
-                    const displayName = categoryNames[baseCategory] || baseCategory;
-                    selectedPartElement.textContent = `${displayName}: ${part.id}`;
+                    const displayName = CATEGORY_NAMES[baseCategory] || baseCategory;
+                    selectedPartElement.textContent = displayName;
                 }
                 
                 // スライダーの値を更新（基準値からの相対値で表示）
@@ -465,18 +475,25 @@ class PortraitApp {
             }
         } else {
             // 通常のパーツの場合
-            this.selectedPart = category;
-            const part = this.parts[category];
+            this.selectedPart = partKey;
+            const part = this.parts[partKey];
             
             if (!part) {
-                console.warn(`パーツが見つかりません: ${category}`);
+                console.warn(`パーツが見つかりません: ${partKey}`);
                 return;
+            }
+            
+            // プルダウンの値を更新
+            const partSelector = document.getElementById('partSelector');
+            if (partSelector) {
+                partSelector.value = baseCategory;
             }
             
             // UIを更新（selectedPart要素が存在する場合のみ）
             const selectedPartElement = document.getElementById('selectedPart');
             if (selectedPartElement) {
-                selectedPartElement.textContent = `${category}: ${part.id}`;
+                const displayName = CATEGORY_NAMES[baseCategory] || baseCategory;
+                selectedPartElement.textContent = displayName;
             }
             
             // スライダーの値を更新（基準値からの相対値で表示）
@@ -752,6 +769,12 @@ class PortraitApp {
         try {
             // 元のカテゴリ名を取得（_left, _rightを除去）
             const originalCategory = part.category;
+            
+            // 無効なカテゴリをスキップ
+            if (!CATEGORY_NAMES.hasOwnProperty(originalCategory)) {
+                console.warn(`無効なカテゴリのパーツを描画をスキップしました: ${originalCategory} (${category})`);
+                return;
+            }
             
             // mouth/mouseの名前不一致を修正
             const folderName = originalCategory === 'mouth' ? 'mouse' : originalCategory;
@@ -1382,34 +1405,55 @@ class PortraitApp {
                     
                     finalX = canvasCenterX + categoryOffset.x + symmetryOffset + part.x;
                     finalY = canvasCenterY + categoryOffset.y + part.y;
+                    
+                    // 左右対称パーツには追加の間隔情報を含める
+                    absoluteParts[partKey] = {
+                        ...part,
+                        // 最終配置座標（キャンバス上の実際の位置）
+                        finalX: finalX,
+                        finalY: finalY,
+                        // 従来の情報も保持
+                        categoryOffset: categoryOffset,
+                        // 左右対称パーツ専用の間隔情報
+                        symmetryInfo: {
+                            defaultSpacing: defaultSpacing,
+                            spacingAdjustment: spacingAdjustment,
+                            totalSpacing: totalSpacing,
+                            symmetryOffset: symmetryOffset,
+                            side: part.isLeft ? 'left' : 'right'
+                        },
+                        canvasCenter: { x: canvasCenterX, y: canvasCenterY }
+                    };
                 } else {
                     // 通常パーツの場合
                     finalX = canvasCenterX + categoryOffset.x + part.x;
                     finalY = canvasCenterY + categoryOffset.y + part.y;
+                    
+                    absoluteParts[partKey] = {
+                        ...part,
+                        // 最終配置座標（キャンバス上の実際の位置）
+                        finalX: finalX,
+                        finalY: finalY,
+                        // 従来の情報も保持
+                        categoryOffset: categoryOffset,
+                        canvasCenter: { x: canvasCenterX, y: canvasCenterY }
+                    };
                 }
-                
-                absoluteParts[partKey] = {
-                    ...part,
-                    // 最終配置座標（キャンバス上の実際の位置）
-                    finalX: finalX,
-                    finalY: finalY,
-                    // 従来の情報も保持
-                    categoryOffset: categoryOffset,
-                    canvasCenter: { x: canvasCenterX, y: canvasCenterY }
-                };
             }
             
             const partsData = {
                 timestamp: new Date().toISOString(),
                 coordinateSystem: {
-                    description: "absoluteX/absoluteYはキャンバス中心(500,400)からの絶対座標、relativeX/relativeYは各カテゴリ基準位置からの相対座標",
-                    canvasCenter: { x: this.canvas.width / 2, y: this.canvas.height / 2 }
+                    description: "finalX/finalYはキャンバス上の最終座標、categoryOffsetはカテゴリの基準オフセット",
+                    canvasCenter: { x: this.canvas.width / 2, y: this.canvas.height / 2 },
+                    symmetricalParts: "左右対称パーツには symmetryInfo が追加され、デフォルト間隔と調整値の詳細情報を含む"
                 },
                 parts: absoluteParts,
                 canvasSize: {
                     width: this.canvas.width,
                     height: this.canvas.height
-                }
+                },
+                defaultSpacingConfig: APP_CONFIG.SYMMETRICAL_SPACING
             };
 
             let portraitUrl = null;
@@ -1442,33 +1486,63 @@ class PortraitApp {
                         this.canvas.toBlob(resolve, 'image/png');
                     });
                     
-                    // ファイル名を生成（picture_idを使用）
-                    const portraitFileName = `portrait_${this.currentPhotoData.picture_id}_${timestamp}.png`;
-                    console.log('アップロード予定ファイル名:', portraitFileName);
+                    // ファイル名を生成（写真IDと更新日時を含む）
+                    const portraitFileName = `portrait_ID${this.currentPhotoData.picture_id}_${timestamp}.png`;
+                    const jsonFileName = `portrait_data_ID${this.currentPhotoData.picture_id}_${timestamp}.json`;
+                    console.log('アップロード予定ファイル名:', portraitFileName, jsonFileName);
                     console.log('Blobサイズ:', blob.size, 'bytes');
+                    
+                    // JSONファイルのBlobを作成
+                    const jsonBlob = new Blob([JSON.stringify(partsData, null, 2)], {
+                        type: 'application/json'
+                    });
+                    console.log('JSON Blobサイズ:', jsonBlob.size, 'bytes');
                     
                     // Supabaseストレージに画像をアップロード
                     const { data: uploadData, error: uploadError } = await window.supabase.storage
-                        .from('pictures')
+                        .from('portraits')
                         .upload(portraitFileName, blob, {
                             contentType: 'image/png',
                             upsert: true
                         });
                     
-                    console.log('アップロード結果:', { uploadData, uploadError });
+                    console.log('似顔絵アップロード結果:', { uploadData, uploadError });
                     
                     if (uploadError) {
-                        throw new Error(`ストレージアップロードエラー: ${uploadError.message}`);
+                        throw new Error(`似顔絵ストレージアップロードエラー: ${uploadError.message}`);
+                    }
+                    
+                    // Supabaseストレージに JSON ファイルをアップロード
+                    const { data: jsonUploadData, error: jsonUploadError } = await window.supabase.storage
+                        .from('json-data')
+                        .upload(jsonFileName, jsonBlob, {
+                            contentType: 'application/json',
+                            upsert: true
+                        });
+                    
+                    console.log('JSONアップロード結果:', { jsonUploadData, jsonUploadError });
+                    
+                    if (jsonUploadError) {
+                        throw new Error(`JSONストレージアップロードエラー: ${jsonUploadError.message}`);
                     }
                     
                     // アップロードされた画像のパブリックURLを取得
                     const { data: urlData } = window.supabase.storage
-                        .from('pictures')
+                        .from('portraits')
                         .getPublicUrl(portraitFileName);
                     
+                    // アップロードされたJSONのパブリックURLを取得
+                    const { data: jsonUrlData } = window.supabase.storage
+                        .from('json-data')
+                        .getPublicUrl(jsonFileName);
+                    
                     portraitUrl = urlData.publicUrl;
+                    const jsonUrl = jsonUrlData.publicUrl;
                     console.log('似顔絵保存完了:', portraitUrl);
+                    console.log('JSON保存完了:', jsonUrl);
                     console.log('URLデータ:', urlData);
+                    console.log('アップロードファイル名:', portraitFileName, jsonFileName);
+                    console.log('バケット名:', 'portraits', 'json-data');
                     
                     // データベースを更新
                     console.log('データベース更新開始:', {
@@ -1481,6 +1555,7 @@ class PortraitApp {
                     console.log('更新するデータ:', {
                         status: '作成済',
                         portrait_url: portraitUrl,
+                        json_url: jsonUrl,
                         json_data: partsData,
                         updated_at: new Date().toISOString()
                     });
@@ -1509,6 +1584,7 @@ class PortraitApp {
                         .update({
                             status: '作成済',
                             portrait_url: portraitUrl,
+                            json_url: jsonUrl,
                             json_data: partsData,
                             updated_at: new Date().toISOString()
                         })
@@ -1546,6 +1622,7 @@ class PortraitApp {
                         picture_id: this.currentPhotoData.picture_id,
                         status: '作成済',
                         portrait_url: portraitUrl,
+                        json_url: jsonUrl,
                         json_data: partsData,
                         updated_at: new Date().toISOString()
                     };
@@ -1558,6 +1635,7 @@ class PortraitApp {
                     // currentPhotoDataを更新（次回保存時のため）
                     this.currentPhotoData.status = '作成済';
                     this.currentPhotoData.portrait_url = portraitUrl;
+                    this.currentPhotoData.json_url = jsonUrl;
                     this.currentPhotoData.json_data = partsData;
                     this.currentPhotoData.updated_at = new Date().toISOString();
                     
@@ -1578,7 +1656,11 @@ class PortraitApp {
             });
             const localBlobUrl = URL.createObjectURL(localBlob);
             const link = document.createElement('a');
-            link.download = `${APP_CONFIG.FILE_NAMES.PORTRAIT_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.IMAGE}`;
+            // 写真IDが存在する場合はIDを含む名前、そうでなければ従来の名前
+            const portraitFileName = this.currentPhotoData 
+                ? `portrait_ID${this.currentPhotoData.picture_id}_${timestamp}.png`
+                : `${APP_CONFIG.FILE_NAMES.PORTRAIT_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.IMAGE}`;
+            link.download = portraitFileName;
             link.href = localBlobUrl;
             link.click();
             
@@ -1592,7 +1674,11 @@ class PortraitApp {
             });
             const jsonUrl = URL.createObjectURL(jsonBlob);
             const jsonLink = document.createElement('a');
-            jsonLink.download = `${APP_CONFIG.FILE_NAMES.DATA_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.DATA}`;
+            // 写真IDが存在する場合はIDを含む名前、そうでなければ従来の名前
+            const jsonFileName = this.currentPhotoData 
+                ? `portrait_data_ID${this.currentPhotoData.picture_id}_${timestamp}.json`
+                : `${APP_CONFIG.FILE_NAMES.DATA_PREFIX}${timestamp}${APP_CONFIG.FILE_NAMES.EXTENSIONS.DATA}`;
+            jsonLink.download = jsonFileName;
             jsonLink.href = jsonUrl;
             jsonLink.click();
             
@@ -1818,9 +1904,20 @@ PortraitApp.prototype.loadPartsFromData = function(jsonData) {
             return;
         }
         
-        // パーツデータを復元
-        this.parts = { ...jsonData.parts };
+        // パーツデータを復元（有効なカテゴリのみ）
+        const validParts = {};
+        Object.entries(jsonData.parts).forEach(([partKey, partData]) => {
+            if (partData && partData.category && CATEGORY_NAMES.hasOwnProperty(partData.category)) {
+                validParts[partKey] = partData;
+            } else {
+                console.warn(`無効なパーツデータを除外しました: ${partKey}`, partData);
+            }
+        });
         
+        this.parts = validParts;
+        
+        // 無効なパーツを完全に除去するクリーンアップ処理
+        this.cleanupInvalidParts();
         
         // UIの状態を更新
         this.updateUIFromPartsData();
@@ -1833,6 +1930,18 @@ PortraitApp.prototype.loadPartsFromData = function(jsonData) {
     }
 };
 
+PortraitApp.prototype.cleanupInvalidParts = function() {
+    const validParts = {};
+    Object.entries(this.parts).forEach(([partKey, partData]) => {
+        if (partData && partData.category && CATEGORY_NAMES.hasOwnProperty(partData.category)) {
+            validParts[partKey] = partData;
+        } else {
+            console.warn(`無効なパーツを削除しました: ${partKey}`, partData);
+        }
+    });
+    this.parts = validParts;
+};
+
 PortraitApp.prototype.updateUIFromPartsData = function() {
     // セレクトボックスの状態を更新
     Object.entries(this.parts).forEach(([category, partData]) => {
@@ -1841,6 +1950,58 @@ PortraitApp.prototype.updateUIFromPartsData = function() {
             selectElement.value = partData.file;
         }
     });
+    
+    // パーツの編集プルダウンを更新
+    this.updatePartSelectorFromData();
+};
+
+PortraitApp.prototype.updatePartSelectorFromData = function() {
+    const partSelector = document.getElementById('partSelector');
+    if (!partSelector) return;
+    
+    // 既存のオプション（最初の「パーツを選択してください」以外）をクリア
+    while (partSelector.children.length > 1) {
+        partSelector.removeChild(partSelector.lastChild);
+    }
+    
+    // 左右対称パーツの重複を避けるため、追加済みカテゴリを記録
+    const addedCategories = new Set();
+    
+    // 読み込まれたパーツをプルダウンに追加
+    Object.entries(this.parts).forEach(([partKey, partData]) => {
+        if (partData && partData.id !== undefined) {
+            const category = partData.category;
+            
+            // 未知のカテゴリは除外（CATEGORY_NAMESに定義されていないもの）
+            if (!CATEGORY_NAMES.hasOwnProperty(category)) {
+                console.warn(`未知のカテゴリを除外しました: ${category} (パーツキー: ${partKey})`);
+                return;
+            }
+            
+            // 左右対称パーツの場合、カテゴリが既に追加されていればスキップ
+            if ((partData.isLeft || partData.isRight) && addedCategories.has(category)) {
+                return;
+            }
+            
+            const option = document.createElement('option');
+            
+            // 左右対称パーツの場合はカテゴリ名をvalueとして使用、そうでなければpartKeyを使用
+            if (partData.isLeft || partData.isRight) {
+                option.value = category;
+                addedCategories.add(category);
+            } else {
+                option.value = partKey;
+            }
+            
+            // 表示名を作成（カテゴリ名のみ）
+            const japaneseCategory = CATEGORY_NAMES[category];
+            option.textContent = japaneseCategory;
+            partSelector.appendChild(option);
+        }
+    });
+    
+    console.log('パーツ編集プルダウンを更新しました:', Object.keys(this.parts));
+    console.log('パーツデータの詳細:', this.parts);
 };
 
 PortraitApp.prototype.waitForSupabase = function() {
